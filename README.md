@@ -2,6 +2,8 @@
 
 An asteroids game about flying badly. Are _those_ following me?
 
+![Dioretsa](docs/screenshot.png)
+
 ## Playing
 
 | Key               | Action        |
