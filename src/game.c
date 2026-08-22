@@ -761,6 +761,28 @@ static void draw_hud(const Game *g)
     }
 }
 
+// Sets a line in the title font, scaled so it spans the given share of the
+// screen and centred. Shared by the wave title and the pause screen, so they
+// cannot drift apart.
+// Returns the height it drew, so a caller can place something under it.
+static float draw_title(const char *txt, float widthShare, float yOffset, Color color)
+{
+    Font  font  = fx_title_font();
+    float track = fx_title_tracking();
+    float probe = 100.0f;
+
+    Vector2 m   = MeasureTextEx(font, txt, probe, probe / track);
+    if (m.x <= 0.0f) return 0.0f;
+
+    float   size = probe * (WORLD_W * widthShare) / m.x;
+    Vector2 dim  = MeasureTextEx(font, txt, size, size / track);
+
+    DrawTextEx(font, txt,
+               (Vector2){ (WORLD_W - dim.x) / 2.0f, (WORLD_H - dim.y) / 2.0f + yOffset },
+               size, size / track, color);
+    return dim.y;
+}
+
 // Screen-filling wave title: it grows past the edges while it fades out, so it
 // takes the screen over rather than sitting on it.
 static void draw_banner(const Game *g)
@@ -774,20 +796,10 @@ static void draw_banner(const Game *g)
 
     // Squared, so the rush starts from a standstill and the hold flows into it.
     float ease  = p * p;
-    float width = WORLD_W * (BANNER_FROM + (BANNER_TO - BANNER_FROM) * ease);
+    float share = BANNER_FROM + (BANNER_TO - BANNER_FROM) * ease;
     float alpha = 1.0f - ease;
 
-    const char *txt = TextFormat("WAVE %i", g->wave);
-    Font  font    = fx_title_font();
-    float track   = fx_title_tracking();
-    float probe   = 100.0f;
-    Vector2 m     = MeasureTextEx(font, txt, probe, probe / track);
-    float size    = probe * width / m.x;
-    Vector2 dim   = MeasureTextEx(font, txt, size, size / track);
-
-    DrawTextEx(font, txt,
-               (Vector2){ (WORLD_W - dim.x) / 2.0f, (WORLD_H - dim.y) / 2.0f },
-               size, size / track, Fade(RAYWHITE, alpha));
+    draw_title(TextFormat("WAVE %i", g->wave), share, 0.0f, Fade(RAYWHITE, alpha));
 }
 
 void game_draw(const Game *g)
@@ -819,11 +831,19 @@ void game_draw(const Game *g)
     draw_banner(g);
 
     if (g->paused) {
-        DrawText("PAUSED", WORLD_W / 2 - MeasureText("PAUSED", 32) / 2, WORLD_H / 2 - 16, 32, RAYWHITE);
+        // A pause sits there indefinitely, so it dims the field behind it.
+        DrawRectangle(0, 0, WORLD_W, WORLD_H, Fade(BLACK, 0.45f));
+        draw_title("PAUSED", 0.9f, 0.0f, RAYWHITE);
     }
     if (g->gameOver) {
-        DrawText("GAME OVER", WORLD_W / 2 - MeasureText("GAME OVER", 48) / 2, WORLD_H / 2 - 40, 48, RAYWHITE);
+        DrawRectangle(0, 0, WORLD_W, WORLD_H, Fade(BLACK, 0.45f));
+
+        // The statement is set in the title face, the instruction is not: they
+        // are different kinds of message and should not look alike.
+        float h = draw_title("GAME OVER", 0.92f, -30.0f, RAYWHITE);
+
         const char *hint = "press R";
-        DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H / 2 + 20, 20, GRAY);
+        DrawText(hint, WORLD_W / 2 - MeasureText(hint, 22) / 2,
+                 (int)(WORLD_H / 2.0f - 30.0f + h / 2.0f + 26.0f), 22, GRAY);
     }
 }
