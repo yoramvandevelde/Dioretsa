@@ -13,6 +13,8 @@
 #define BULLET_LIFE       1.2f
 #define BULLET_RADIUS     2.0f
 #define FIRE_COOLDOWN     0.18f
+#define FIRE_RECOIL       45.0f     // pixels per second, kicked back on firing
+#define MUZZLE_FLASH_TIME 0.07f     // must stay below FIRE_COOLDOWN
 
 #define SEEK_ACCEL        140.0f    // pixels per second^2 for BEHAVIOR_SEEK
 #define SAFE_SPAWN_DIST   180.0f    // keep spawns clear of the ship
@@ -204,6 +206,11 @@ static void fire_bullet(Game *g)
     b->base.alive  = true;
     b->life        = BULLET_LIFE;
 
+    // Kick the ship back, then spit sparks out of the barrel.
+    g->ship.base.vel.x -= dir.x * FIRE_RECOIL;
+    g->ship.base.vel.y -= dir.y * FIRE_RECOIL;
+    fx_emit_muzzle(&g->fx, b->base.pos, dir, s->base.vel);
+
     g->ship.fireCooldown = FIRE_COOLDOWN;
 }
 
@@ -392,6 +399,14 @@ static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
 static void draw_ship_at(const Ship *s, Vector2 pos)
 {
     draw_ship_shape(pos, s->base.rot, 1.0f, RAYWHITE);
+
+    // Flash while the cooldown is still fresh: no extra timer needed.
+    float flash = (s->fireCooldown - (FIRE_COOLDOWN - MUZZLE_FLASH_TIME)) / MUZZLE_FLASH_TIME;
+    if (flash > 0.0f) {
+        Vector2 dir  = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
+        Vector2 nose = { pos.x + dir.x * 17.0f, pos.y + dir.y * 17.0f };
+        fx_glow_dot(nose, 1.5f + 4.5f * flash, Fade((Color){ 255, 245, 200, 255 }, flash));
+    }
 
     if (s->thrusting) {
         Vector2 flame = rotate((Vector2){ -20.0f, 0.0f }, s->base.rot);

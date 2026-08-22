@@ -68,6 +68,8 @@ gameplay uses. Same input, same run, effects on or off.
   from hot yellow into the tail colour.
 - **Debris**: a destroyed enemy bursts into `6 + sides * 3` particles in its own
   colour, inheriting half its velocity. Losing a life bursts white.
+- **Muzzle flash**: a glow on the nose plus a tight spray of sparks when firing.
+  The flash is derived from the fire cooldown, so it needs no timer of its own.
 - **Vector glow**: every shape gets two soft additive halo passes with a crisp
   line on top, which is what gives it the arcade CRT look.
 
@@ -88,6 +90,10 @@ gives back plain lines.
 
 Crashing into an enemy costs a life but leaves the enemy intact: no score, no
 split. Only bullets break things apart.
+
+Firing kicks the ship back by 45 px/s. At one shot per 0.18s that is roughly
+250 px/s2 against your heading, close to three quarters of the engine, so
+shooting along your course doubles as a brake.
 
 Star field, thruster trail, debris bursts and vector glow, all in `fx.c`.
 

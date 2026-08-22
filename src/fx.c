@@ -17,6 +17,11 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 #define THRUST_LIFE_MIN   0.25f
 #define THRUST_LIFE_MAX   0.60f
 
+#define MUZZLE_SPARKS     6
+#define MUZZLE_SPREAD     0.30f     // radians, tighter than the thruster cone
+#define MUZZLE_LIFE_MIN   0.05f
+#define MUZZLE_LIFE_MAX   0.14f
+
 #define DEBRIS_LIFE_MIN   0.35f
 #define DEBRIS_LIFE_MAX   0.90f
 
@@ -127,6 +132,25 @@ void fx_emit_thrust(Fx *fx, Vector2 tail, Vector2 dir, Vector2 shipVel)
         p->size    = frand(fx, 1.6f, 3.2f);
         p->color   = (Color){ 255, 225, 140, 255 };     // hot at the nozzle
         p->fadeTo  = (Color){ 0, 245,  0,   255 };     // cooled down at the tail
+    }
+}
+
+void fx_emit_muzzle(Fx *fx, Vector2 nose, Vector2 dir, Vector2 shipVel)
+{
+    for (int i = 0; i < MUZZLE_SPARKS; i++) {
+        Particle *p = free_particle(fx);
+        if (!p) return;
+
+        Vector2 out = rotate(dir, frand(fx, -MUZZLE_SPREAD, MUZZLE_SPREAD));
+        float   sp  = frand(fx, 130.0f, 280.0f);
+
+        p->pos     = nose;
+        p->vel     = (Vector2){ shipVel.x + out.x * sp, shipVel.y + out.y * sp };
+        p->maxLife = frand(fx, MUZZLE_LIFE_MIN, MUZZLE_LIFE_MAX);
+        p->life    = p->maxLife;
+        p->size    = frand(fx, 1.2f, 2.4f);
+        p->color   = (Color){ 255, 255, 225, 255 };
+        p->fadeTo  = (Color){ 255, 140, 40,  255 };
     }
 }
 

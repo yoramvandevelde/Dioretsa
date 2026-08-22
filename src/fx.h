@@ -40,6 +40,9 @@ void fx_update(Fx *fx, Vector2 referenceVel, float dt);
 // Emits a puff out of the ship's tail. dir is the ship's facing direction.
 void fx_emit_thrust(Fx *fx, Vector2 tail, Vector2 dir, Vector2 shipVel);
 
+// A short spray of sparks out of the gun barrel.
+void fx_emit_muzzle(Fx *fx, Vector2 nose, Vector2 dir, Vector2 shipVel);
+
 // Debris flying outwards from a destroyed object, in its own colour.
 void fx_emit_burst(Fx *fx, Vector2 pos, Vector2 inheritVel, Color color,
                    int count, float speed);
