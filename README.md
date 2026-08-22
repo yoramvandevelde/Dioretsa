@@ -32,7 +32,9 @@ cmake --build build
 
 The world is 1280x720 and wraps on every edge, exactly one world across.
 Anything straddling an edge is drawn on the far side as well (`ghost_positions`),
-corners included, so objects slide across instead of popping in and out. `main.c` translates raw keys into
+corners included, so objects slide across instead of popping in and out, and
+distances are measured the short way round (`torus_offset`) so what overlaps on
+screen also overlaps in the maths. `main.c` translates raw keys into
 an `Input` struct, so `game.c` never has to know about key codes.
 
 Enemies and bullets live in fixed-size pools; a slot is free as soon as
@@ -150,8 +152,12 @@ shooting along your course doubles as a brake.
 
 Star field, thruster trail, debris bursts and vector glow, all in `fx.c`.
 
-Not done yet: sound, impact particles, screen shake, high score, and collisions
-that reach across the world edge.
+Distance is measured the short way round the torus (`torus_offset`), so two
+objects that visibly overlap across an edge actually touch. Everything that
+measures goes through it: collisions, bullets, grazing, the respawn check and
+wave spawning.
+
+Not done yet: sound, screen shake and a high score.
 
 ## Licences
 

@@ -88,12 +88,24 @@ static void entity_integrate(Entity *e, float dt)
     wrap(&e->pos);
 }
 
-// Collisions are not tested across the world edge: two objects on opposite
-// sides of it never touch. At these speeds that goes unnoticed.
+// Shortest way from one coordinate to another on a wrapping axis: leaving one
+// edge and coming back in on the other is often the short way round. Signed, so
+// it also serves as a direction. wrap() keeps positions inside [0, span), which
+// makes this exact rather than approximate.
+static float torus_offset(float from, float to, float span)
+{
+    float d = to - from;
+    if (d >  span * 0.5f) d -= span;
+    if (d < -span * 0.5f) d += span;
+    return d;
+}
+
+// Everything that measures a distance has to go through here, or objects that
+// visibly overlap across an edge silently miss each other.
 static bool entity_hit(const Entity *a, const Entity *b)
 {
-    float dx = a->pos.x - b->pos.x;
-    float dy = a->pos.y - b->pos.y;
+    float dx = torus_offset(a->pos.x, b->pos.x, WORLD_W);
+    float dy = torus_offset(a->pos.y, b->pos.y, WORLD_H);
     float r  = a->radius + b->radius;
     return (dx * dx + dy * dy) < (r * r);
 }
@@ -166,8 +178,8 @@ static Vector2 safe_spawn_pos(const Game *g)
     Vector2 p;
     do {
         p = (Vector2){ frand(0.0f, WORLD_W), frand(0.0f, WORLD_H) };
-    } while (fabsf(p.x - g->ship.base.pos.x) < SAFE_SPAWN_DIST &&
-             fabsf(p.y - g->ship.base.pos.y) < SAFE_SPAWN_DIST);
+    } while (fabsf(torus_offset(p.x, g->ship.base.pos.x, WORLD_W)) < SAFE_SPAWN_DIST &&
+             fabsf(torus_offset(p.y, g->ship.base.pos.y, WORLD_H)) < SAFE_SPAWN_DIST);
     return p;
 }
 
@@ -265,7 +277,8 @@ static bool centre_is_clear(const Game *g)
         const Enemy *e = &g->enemies[i];
         if (!e->base.alive) continue;
 
-        float dx = c.x - e->base.pos.x, dy = c.y - e->base.pos.y;
+        float dx = torus_offset(e->base.pos.x, c.x, WORLD_W);
+        float dy = torus_offset(e->base.pos.y, c.y, WORLD_H);
         float r  = e->base.radius + RESPAWN_CLEAR;
         if (dx * dx + dy * dy >= r * r) continue;
 
@@ -426,8 +439,8 @@ void game_update(Game *g, const Input *in, float dt)
             const Enemy *e = &g->enemies[i];
             if (!e->base.alive) continue;
 
-            float dx = e->base.pos.x - s->base.pos.x;
-            float dy = e->base.pos.y - s->base.pos.y;
+            float dx = torus_offset(s->base.pos.x, e->base.pos.x, WORLD_W);
+            float dy = torus_offset(s->base.pos.y, e->base.pos.y, WORLD_H);
             float outer = e->base.radius + s->base.radius + GRAZE_BAND;
             if (dx * dx + dy * dy >= outer * outer) continue;
 
