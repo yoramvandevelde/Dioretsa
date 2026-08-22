@@ -8,6 +8,16 @@
 #define SHIP_DRAG         0.6f      // per second
 #define SHIP_RADIUS       14.0f
 #define SHIP_INVULN       2.0f      // seconds of invulnerability after respawn
+// The title holds still long enough to read, then rushes the screen. The wave
+// spawns the moment the zoom starts, and the player is untouchable until the
+// letters are gone.
+#define BANNER_HOLD       1.0f      // seconds standing still at full opacity
+#define BANNER_ZOOM       1.0f      // seconds of zooming out of frame
+#define BANNER_TIME       (BANNER_HOLD + BANNER_ZOOM)
+#define BANNER_FROM       0.85f     // held width, as a share of the screen
+#define BANNER_TO         2.60f     // final width, well past the edges
+#define BANNER_TRACKING   16.0f     // font size over this is the letter spacing
+
 #define GRAZE_BAND        26.0f     // how far past the hulls still counts
 #define GRAZE_TICK        0.25f     // pays out per quarter second of grazing
 #define GRAZE_MULT_CAP    4         // a crowd is not the same as a stunt
@@ -195,9 +205,10 @@ void game_init(Game *g)
 
     reset_ship(&g->ship);
     fx_init(&g->fx);
-    g->lives = START_LIVES;
-    g->wave  = 1;
-    spawn_wave(g);
+    g->lives  = START_LIVES;
+    g->wave   = 1;
+    g->banner    = BANNER_TIME;
+    g->waveDelay = BANNER_HOLD;     // the opening wave arrives with the zoom too
 }
 
 static void fire_bullet(Game *g)
@@ -443,9 +454,20 @@ void game_update(Game *g, const Input *in, float dt)
         s->grazeTimer = 0.0f;
     }
 
-    if (enemies_alive(g) == 0) {
+    if (g->banner > 0.0f) g->banner -= dt;
+
+    // Clearing a wave puts the title up and holds the next one back for a beat.
+    if (g->waveDelay > 0.0f) {
+        g->waveDelay -= dt;
+        if (g->waveDelay <= 0.0f) spawn_wave(g);
+    } else if (enemies_alive(g) == 0) {
         g->wave++;
-        spawn_wave(g);
+        g->banner    = BANNER_TIME;
+        g->waveDelay = BANNER_HOLD;
+
+        // Untouchable until the title clears, so nobody dies to a wave they
+        // could not see coming.
+        if (s->invuln < BANNER_TIME) s->invuln = BANNER_TIME;
     }
 }
 
@@ -497,6 +519,7 @@ static void draw_ship_at(const Ship *s, Vector2 pos)
     // remaining time is readable at a glance.
     if (s->invuln > 0.0f) {
         float k = s->invuln / SHIP_INVULN;       // 1 on respawn, 0 when it lapses
+        if (k > 1.0f) k = 1.0f;
         fx_glow_ring(pos,
                      SHIP_RADIUS + 6.0f + SHIELD_RADIUS * k,
                      1.2f + SHIELD_THICKNESS * k,
@@ -568,6 +591,34 @@ static void draw_hud(const Game *g)
     }
 }
 
+// Screen-filling wave title: it grows past the edges while it fades out, so it
+// takes the screen over rather than sitting on it.
+static void draw_banner(const Game *g)
+{
+    if (g->banner <= 0.0f) return;
+
+    float elapsed = BANNER_TIME - g->banner;
+    float p       = (elapsed - BANNER_HOLD) / BANNER_ZOOM;      // negative while held
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+
+    // Squared, so the rush starts from a standstill and the hold flows into it.
+    float ease  = p * p;
+    float width = WORLD_W * (BANNER_FROM + (BANNER_TO - BANNER_FROM) * ease);
+    float alpha = 1.0f - ease;
+
+    const char *txt = TextFormat("WAVE %i", g->wave);
+    Font  font    = GetFontDefault();
+    float probe   = 100.0f;
+    Vector2 m     = MeasureTextEx(font, txt, probe, probe / BANNER_TRACKING);
+    float size    = probe * width / m.x;
+    Vector2 dim   = MeasureTextEx(font, txt, size, size / BANNER_TRACKING);
+
+    DrawTextEx(font, txt,
+               (Vector2){ (WORLD_W - dim.x) / 2.0f, (WORLD_H - dim.y) / 2.0f },
+               size, size / BANNER_TRACKING, Fade(RAYWHITE, alpha));
+}
+
 void game_draw(const Game *g)
 {
     fx_draw_stars(&g->fx);
@@ -590,6 +641,7 @@ void game_draw(const Game *g)
 
     fx_draw_scores(&g->fx);
     draw_hud(g);
+    draw_banner(g);
 
     if (g->paused) {
         DrawText("PAUSED", WORLD_W / 2 - MeasureText("PAUSED", 32) / 2, WORLD_H / 2 - 16, 32, RAYWHITE);

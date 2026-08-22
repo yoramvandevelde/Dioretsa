@@ -55,6 +55,18 @@ Shapes are regular polygons drawn with `DrawPolyLines`, so all sides are equal.
 Behaviour lives in `enemy_behave()`: `DRIFT` (straight line), `SPINNER` (tumbles
 faster) and `SEEK` (steers towards the ship, as the triangle does).
 
+## Waves
+
+Clearing a wave puts its title on screen: one second standing still at 85% of
+the screen width so it can be read, then one second growing to 260% while it
+fades, which puts it over the game rather than on it. The growth is squared, so
+it starts from a standstill and the hold flows into the rush without a kink.
+
+The next wave spawns the moment the zoom starts, and the ship is untouchable
+until the letters clear. Nobody dies to an enemy that came out from behind a
+letter, and grazing is dead in that window because it already keys off the
+shield.
+
 ## Grazing
 
 Flying close pays. Every 0.25s spent inside a band 26 px beyond the hulls pays

@@ -81,6 +81,8 @@ typedef struct {
     int      score;
     int      lives;
     int      wave;
+    float    banner;                // counts down while the wave title is up
+    float    waveDelay;             // breather before the next wave spawns
     bool     paused;
     bool     gameOver;
     Fx       fx;                    // cosmetic only, never read by the rules
