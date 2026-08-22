@@ -113,6 +113,7 @@ typedef struct {
     float    banner;                // counts down while the wave title is up
     float    waveDelay;             // breather before the next wave spawns
     Stats    stats;
+    bool     attract;               // title screen: the field drifts, nobody flies
     bool     paused;
     bool     gameOver;
     Fx       fx;                    // cosmetic only, never read by the rules
@@ -133,6 +134,10 @@ void game_set_god_mode(bool on);
 bool game_god_mode(void);
 
 void game_init(Game *g);
+
+// Turns a freshly initialised game into the title screen: same field, no ship,
+// no HUD. Any key runs game_init again and the run starts for real.
+void game_attract(Game *g);
 void game_update(Game *g, const Input *in, float dt);   // fixed timestep
 void game_draw(const Game *g);
 

@@ -49,7 +49,8 @@ bool audio_music_on(void);
 
 // A hint of room around everything, on the final mix. raylib has no send bus,
 // so this is all or nothing: keep it subtle, or it flattens the difference
-// between near and far. Toggling ramps rather than switches.
+// between near and far. Switched on at startup and left alone; the ramp is
+// there so the reverb test can toggle it without a click.
 void audio_set_reverb(bool on);
 bool audio_reverb_on(void);
 

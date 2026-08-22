@@ -26,7 +26,11 @@ handing one back.
 | Space             | fire          |
 | P                 | pause         |
 | R                 | restart       |
+| M                 | music on/off  |
 | Esc               | quit          |
+
+Any key starts a run from the title screen. Two flags: `--skip-menu` goes
+straight into wave 1, and `--godmode` stops you dying while testing later waves.
 
 ## Layout
 
@@ -164,8 +168,8 @@ A soundscape runs from launch to exit, straight through pause and game over: it
 is the room you are in, not a reaction to anything. M fades it in and out, so
 comparing it against silence is not itself an event.
 
-A Schroeder reverb sits on the final mix, four combs into two allpasses, with V
-to toggle it. raylib has no send bus, so it is all or nothing: the delays are
+A Schroeder reverb sits on the final mix, four combs into two allpasses.
+raylib has no send bus, so it is all or nothing: the delays are
 long, so it reads as space rather than a room, and the wet level is deliberately
 low. A loud one puts everything in the same room and flattens the difference
 between near and far.
@@ -175,6 +179,13 @@ The engine is a music stream that never stops. Thrust moves a target and
 starting and stopping a sound on every tap clicks and rattles, a ramp does not.
 Its pitch follows your speed against terminal velocity, and it sits well under
 everything else because it plays constantly.
+
+## The title screen
+
+The game opens on its own field: stars panning slowly, enemies drifting, no ship
+and no HUD, with ANY KEY... breathing in the middle. Any key at all starts a run,
+and nothing else is read that frame, or the key you pressed would also pause the
+game or mute the music on the way in. `--skip-menu` goes straight into wave 1.
 
 ## The report
 

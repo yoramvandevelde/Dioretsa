@@ -292,6 +292,20 @@ void game_init(Game *g)
     audio_play(SND_WAVE);
 }
 
+void game_attract(Game *g)
+{
+    g->attract         = true;
+    g->ship.base.alive = false;
+    g->ship.respawnIn  = 1e9f;      // never materialises while we are waiting
+    g->banner          = 0.0f;      // no wave title over the title screen
+    audio_stop(SND_WAVE);
+
+    // The field normally arrives with the zoom of the wave title, which the
+    // title screen does not run, so put it out now.
+    g->waveDelay = 0.0f;
+    spawn_wave(g);
+}
+
 static void fire_bullet(Game *g)
 {
     int slot = find_free_slot(&g->bullets[0].base, MAX_BULLETS, sizeof(Bullet));
@@ -399,6 +413,20 @@ void game_update(Game *g, const Input *in, float dt)
 {
     if (g->paused || g->gameOver) {
         audio_set_engine((EngineState){ .seam = 1.0f });
+        return;
+    }
+
+    if (g->attract) {
+        audio_set_engine((EngineState){ .seam = 1.0f });
+
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            Enemy *e = &g->enemies[i];
+            if (!e->base.alive) continue;
+            enemy_behave(e, g, dt);
+            entity_integrate(&e->base, dt);
+        }
+        // A slow pan, so the sky is not the only thing standing still.
+        fx_update(&g->fx, (Vector2){ 14.0f, 5.0f }, dt);
         return;
     }
 
@@ -902,6 +930,17 @@ static void draw_banner(const Game *g)
 void game_draw(const Game *g)
 {
     fx_draw_stars(&g->fx);
+
+    if (g->attract) {
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
+        }
+
+        // Breathing slowly, so it reads as waiting rather than as a label.
+        float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 1.6f);
+        draw_title("ANY KEY...", 0.62f, 0.0f, Fade(RAYWHITE, 0.45f + 0.55f * pulse));
+        return;
+    }
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
