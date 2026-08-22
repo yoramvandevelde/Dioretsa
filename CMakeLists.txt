@@ -11,7 +11,7 @@ if(APPLE AND SELF_CONTAINED)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
-project(astroid C)
+project(dioretsa C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -33,7 +33,7 @@ else()
     find_package(raylib ${RAYLIB_VERSION} REQUIRED)
 endif()
 
-add_executable(astroid
+add_executable(dioretsa
     src/main.c
     src/game.c
     src/fx.c
@@ -41,12 +41,12 @@ add_executable(astroid
     src/assets.c
 )
 
-target_include_directories(astroid PRIVATE src)
-target_link_libraries(astroid PRIVATE raylib)
-target_compile_options(astroid PRIVATE -Wall -Wextra -Wno-unused-parameter)
+target_include_directories(dioretsa PRIVATE src)
+target_link_libraries(dioretsa PRIVATE raylib)
+target_compile_options(dioretsa PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 if(APPLE)
-    target_link_libraries(astroid PRIVATE
+    target_link_libraries(dioretsa PRIVATE
         "-framework CoreVideo" "-framework IOKit" "-framework Cocoa" "-framework OpenGL")
 endif()
 

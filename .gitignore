@@ -6,3 +6,8 @@ compile_commands.json
 
 # rfxgen project files, the wavs are what the game needs
 *.rfx
+
+# editor leftovers
+.*.swp
+.*.swo
+*~

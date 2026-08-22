@@ -24,7 +24,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--skip-menu") == 0) skipMenu = true;
     }
 
-    InitWindow(WORLD_W, WORLD_H, "astroid v0.2");
+    InitWindow(WORLD_W, WORLD_H, "Dioretsa");
     SetTargetFPS(60);
     InitAudioDevice();
     fx_load_title_font();
