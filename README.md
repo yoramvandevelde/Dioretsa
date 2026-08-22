@@ -29,7 +29,9 @@ cmake --build build
 - `src/game.c` - update, collisions and drawing
 - `src/fx.h` / `src/fx.c` - star field, particles and the glow helpers
 
-The world is 1280x720 and wraps on every edge. `main.c` translates raw keys into
+The world is 1280x720 and wraps on every edge, exactly one world across.
+Anything straddling an edge is drawn on the far side as well (`ghost_positions`),
+corners included, so objects slide across instead of popping in and out. `main.c` translates raw keys into
 an `Input` struct, so `game.c` never has to know about key codes.
 
 Enemies and bullets live in fixed-size pools; a slot is free as soon as
@@ -68,6 +70,8 @@ gameplay uses. Same input, same run, effects on or off.
   colour, inheriting half its velocity. Losing a life bursts white.
 - **Vector glow**: every shape gets two soft additive halo passes with a crisp
   line on top, which is what gives it the arcade CRT look.
+
+Particles wrap along with the world, so a trail is not cut off at the edge.
 
 Tuning knobs sit together at the top of `src/fx.c`: `LAYER_PARALLAX` and
 `LAYER_ALPHA` for depth, the `THRUST_*` and `DEBRIS_*` values for the particles,

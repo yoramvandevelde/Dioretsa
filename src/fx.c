@@ -43,7 +43,8 @@ static Vector2 rotate(Vector2 v, float a)
     return (Vector2){ v.x * c - v.y * s, v.x * s + v.y * c };
 }
 
-static void wrap_star(Vector2 *p)
+// Stars and particles live in the same wrapping world as the ship does.
+static void wrap_world(Vector2 *p)
 {
     if (p->x < 0.0f)    p->x += WORLD_W;
     if (p->x > WORLD_W) p->x -= WORLD_W;
@@ -80,7 +81,7 @@ void fx_update(Fx *fx, Vector2 referenceVel, float dt)
             Star *s = &fx->stars[layer * STARS_PER_LAYER + i];
             s->pos.x -= referenceVel.x * f * dt;
             s->pos.y -= referenceVel.y * f * dt;
-            wrap_star(&s->pos);
+            wrap_world(&s->pos);
         }
     }
 
@@ -96,6 +97,8 @@ void fx_update(Fx *fx, Vector2 referenceVel, float dt)
         float damp = 1.0f - 1.8f * dt;
         p->vel.x *= damp;
         p->vel.y *= damp;
+
+        wrap_world(&p->pos);    // a trail must not get cut off at the edge
     }
 }
 

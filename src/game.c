@@ -47,12 +47,15 @@ static Vector2 rotate(Vector2 v, float a)
 }
 
 // The world is a torus: whatever leaves one edge comes back in on the other.
-static void wrap(Vector2 *p, float r)
+// Wrap exactly one world across, never a fraction more. Drawing hands out the
+// mirrored copies (see ghost_positions), so an object straddling an edge is
+// already visible on both sides and any overshoot here shows up as a jump.
+static void wrap(Vector2 *p)
 {
-    if (p->x < -r)          p->x = WORLD_W + r;
-    if (p->x > WORLD_W + r) p->x = -r;
-    if (p->y < -r)          p->y = WORLD_H + r;
-    if (p->y > WORLD_H + r) p->y = -r;
+    if (p->x < 0.0f)     p->x += WORLD_W;
+    if (p->x >= WORLD_W) p->x -= WORLD_W;
+    if (p->y < 0.0f)     p->y += WORLD_H;
+    if (p->y >= WORLD_H) p->y -= WORLD_H;
 }
 
 static void entity_integrate(Entity *e, float dt)
@@ -60,7 +63,7 @@ static void entity_integrate(Entity *e, float dt)
     e->pos.x += e->vel.x * dt;
     e->pos.y += e->vel.y * dt;
     e->rot   += e->rotVel * dt;
-    wrap(&e->pos, e->radius);
+    wrap(&e->pos);
 }
 
 // Collisions are not tested across the world edge: two objects on opposite
@@ -345,6 +348,30 @@ void game_update(Game *g, const Input *in, float dt)
     }
 }
 
+// An object near an edge has to be drawn on the far side as well, otherwise it
+// pops in and out instead of sliding across. Corners need all four copies. The
+// margin covers the glow halo, which reaches past the shape itself.
+#define GHOST_MARGIN 10.0f
+
+static int ghost_positions(Vector2 pos, float radius, Vector2 out[4])
+{
+    float r = radius + GHOST_MARGIN;
+    float dx[2] = { 0.0f, 0.0f }, dy[2] = { 0.0f, 0.0f };
+    int   nx = 1, ny = 1, n = 0;
+
+    if      (pos.x < r)             dx[nx++] =  WORLD_W;
+    else if (pos.x > WORLD_W - r)   dx[nx++] = -WORLD_W;
+    if      (pos.y < r)             dy[ny++] =  WORLD_H;
+    else if (pos.y > WORLD_H - r)   dy[ny++] = -WORLD_H;
+
+    for (int i = 0; i < nx; i++) {
+        for (int j = 0; j < ny; j++) {
+            out[n++] = (Vector2){ pos.x + dx[i], pos.y + dy[j] };
+        }
+    }
+    return n;
+}
+
 static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
 {
     const Vector2 local[3] = {
@@ -362,30 +389,42 @@ static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
     fx_glow_strip(p, 4, color);
 }
 
-static void draw_ship(const Ship *s)
+static void draw_ship_at(const Ship *s, Vector2 pos)
 {
-    // Blink while invulnerable.
-    if (s->invuln > 0.0f && fmodf(s->invuln, 0.24f) < 0.12f) return;
-
-    draw_ship_shape(s->base.pos, s->base.rot, 1.0f, RAYWHITE);
+    draw_ship_shape(pos, s->base.rot, 1.0f, RAYWHITE);
 
     if (s->thrusting) {
         Vector2 flame = rotate((Vector2){ -20.0f, 0.0f }, s->base.rot);
         Vector2 back1 = rotate((Vector2){ -11.0f,  10.0f }, s->base.rot);
         Vector2 back2 = rotate((Vector2){ -11.0f, -10.0f }, s->base.rot);
         Vector2 f[3] = {
-            { s->base.pos.x + back1.x, s->base.pos.y + back1.y },
-            { s->base.pos.x + flame.x, s->base.pos.y + flame.y },
-            { s->base.pos.x + back2.x, s->base.pos.y + back2.y },
+            { pos.x + back1.x, pos.y + back1.y },
+            { pos.x + flame.x, pos.y + flame.y },
+            { pos.x + back2.x, pos.y + back2.y },
         };
         fx_glow_strip(f, 3, ORANGE);
     }
 }
 
+static void draw_ship(const Ship *s)
+{
+    // Blink while invulnerable.
+    if (s->invuln > 0.0f && fmodf(s->invuln, 0.24f) < 0.12f) return;
+
+    Vector2 at[4];
+    int n = ghost_positions(s->base.pos, s->base.radius, at);
+    for (int i = 0; i < n; i++) draw_ship_at(s, at[i]);
+}
+
 static void draw_enemy(const Enemy *e)
 {
     const EnemyType *t = &ENEMY_TYPES[e->type];
-    fx_glow_poly(e->base.pos, t->sides, e->base.radius, e->base.rot * RAD2DEG, t->color);
+
+    Vector2 at[4];
+    int n = ghost_positions(e->base.pos, e->base.radius, at);
+    for (int i = 0; i < n; i++) {
+        fx_glow_poly(at[i], t->sides, e->base.radius, e->base.rot * RAD2DEG, t->color);
+    }
 }
 
 static void draw_hud(const Game *g)
@@ -411,7 +450,11 @@ void game_draw(const Game *g)
 
     fx_draw_particles(&g->fx);      // behind the ship, on top of the world
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (g->bullets[i].base.alive) fx_glow_dot(g->bullets[i].base.pos, BULLET_RADIUS, RAYWHITE);
+        if (!g->bullets[i].base.alive) continue;
+
+        Vector2 at[4];
+        int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
+        for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
     }
     if (g->ship.base.alive) draw_ship(&g->ship);
 
