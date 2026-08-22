@@ -70,6 +70,11 @@ gameplay uses. Same input, same run, effects on or off.
   colour, inheriting half its velocity. Losing a life bursts white.
 - **Muzzle flash**: a glow on the nose plus a tight spray of sparks when firing.
   The flash is derived from the fire cooldown, so it needs no timer of its own.
+- **Shield**: one ring that shrinks onto the hull, thins out and fades to nothing
+  over the invulnerable window. Radius, thickness and alpha all run off the same
+  remaining time, so there are no phases to jump between and no blinking. The
+  alpha reaches zero exactly when the protection does, so the ship can look
+  unprotected a moment early but never the other way round.
 - **Vector glow**: every shape gets two soft additive halo passes with a crisp
   line on top, which is what gives it the arcade CRT look.
 
@@ -85,7 +90,11 @@ gives back plain lines.
 - Bullets with a cooldown and a lifetime, inheriting the ship's velocity
 - Circle-circle collisions for bullet against enemy and ship against enemy
 - Enemy types with a split chain from hexagon down to triangle
-- 3 lives, respawn with 2 seconds of blinking invulnerability, game over
+- 3 lives, game over when the last one is gone
+- Dying takes you off the board for 0.9s, after which you materialise once the
+  spawn point is clear, capped at 1.2s more so a busy middle cannot lock you
+  out. While held up, a red hull pulses on the spawn point so the wait reads as
+  the game holding rather than hanging.
 - Score per type, waves growing to 8 large enemies
 
 Crashing into an enemy costs a life but leaves the enemy intact: no score, no

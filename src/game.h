@@ -30,6 +30,7 @@ typedef struct {
     bool   thrusting;
     float  invuln;          // seconds of invulnerability left after respawn
     float  fireCooldown;
+    float  respawnIn;       // counts down while dead, then waits for a clear centre
 } Ship;
 
 typedef struct {

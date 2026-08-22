@@ -56,4 +56,7 @@ void fx_glow_poly(Vector2 center, int sides, float radius, float rotationDeg, Co
 void fx_glow_strip(const Vector2 *points, int count, Color color);
 void fx_glow_dot(Vector2 pos, float radius, Color color);
 
+// A band of the given thickness centred on radius, halo included.
+void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color);
+
 #endif // FX_H

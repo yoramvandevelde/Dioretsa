@@ -214,11 +214,13 @@ void fx_draw_particles(const Fx *fx)
 // a black background is what gives it the CRT bloom look.
 void fx_glow_poly(Vector2 center, int sides, float radius, float rotationDeg, Color color)
 {
+    float a = color.a / 255.0f;     // a fading shape must fade its halo too
+
     BeginBlendMode(BLEND_ADDITIVE);
         DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_WIDE,
-                        Fade(color, GLOW_WIDE_ALPHA));
+                        Fade(color, GLOW_WIDE_ALPHA * a));
         DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_TIGHT,
-                        Fade(color, GLOW_TIGHT_ALPHA));
+                        Fade(color, GLOW_TIGHT_ALPHA * a));
     EndBlendMode();
 
     DrawPolyLines(center, sides, radius, rotationDeg, color);
@@ -228,10 +230,12 @@ void fx_glow_strip(const Vector2 *points, int count, Color color)
 {
     if (count < 2) return;
 
+    float a = color.a / 255.0f;     // a fading shape must fade its halo too
+
     BeginBlendMode(BLEND_ADDITIVE);
         for (int pass = 0; pass < 2; pass++) {
             float width = (pass == 0) ? GLOW_WIDE : GLOW_TIGHT;
-            float alpha = (pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA;
+            float alpha = ((pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA) * a;
             for (int i = 0; i < count - 1; i++) {
                 DrawLineEx(points[i], points[i + 1], width, Fade(color, alpha));
             }
@@ -243,10 +247,26 @@ void fx_glow_strip(const Vector2 *points, int count, Color color)
 
 void fx_glow_dot(Vector2 pos, float radius, Color color)
 {
+    float a = color.a / 255.0f;     // a fading shape must fade its halo too
+
     BeginBlendMode(BLEND_ADDITIVE);
-        DrawCircleV(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA));
-        DrawCircleV(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA));
+        DrawCircleV(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
+        DrawCircleV(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
     EndBlendMode();
 
     DrawCircleV(pos, radius, color);
+}
+
+void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)
+{
+    float a    = color.a / 255.0f;
+    float half = thickness * 0.5f;
+    if (half < 0.4f) half = 0.4f;
+
+    BeginBlendMode(BLEND_ADDITIVE);
+        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, 0.0f, 360.0f, 64,
+                 Fade(color, GLOW_WIDE_ALPHA * a));
+    EndBlendMode();
+
+    DrawRing(pos, radius - half, radius + half, 0.0f, 360.0f, 64, color);
 }

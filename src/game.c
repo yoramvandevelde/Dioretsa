@@ -8,6 +8,13 @@
 #define SHIP_DRAG         0.6f      // per second
 #define SHIP_RADIUS       14.0f
 #define SHIP_INVULN       2.0f      // seconds of invulnerability after respawn
+#define PENDING_PULSE     6.0f      // rad/s of the waiting-to-respawn pulse
+#define SHIELD_RADIUS     78.0f     // how far out the shield starts
+#define SHIELD_THICKNESS  7.0f      // band width at full strength
+
+#define RESPAWN_DELAY     0.9f      // pause before trying to come back at all
+#define RESPAWN_MAX_WAIT  1.2f      // never hold the player hostage longer
+#define RESPAWN_CLEAR     55.0f     // only block on something practically on top
 
 #define BULLET_SPEED      520.0f
 #define BULLET_LIFE       1.2f
@@ -174,6 +181,7 @@ static void reset_ship(Ship *s)
     s->thrusting    = false;
     s->invuln       = SHIP_INVULN;
     s->fireCooldown = 0.0f;
+    s->respawnIn    = 0.0f;
 }
 
 void game_init(Game *g)
@@ -225,7 +233,33 @@ static void kill_ship(Game *g)
         g->ship.base.alive = false;
         return;
     }
-    reset_ship(&g->ship);
+
+    // Stay gone for a moment; game_update decides when it is safe to return.
+    g->ship.base.alive = false;
+    g->ship.respawnIn  = RESPAWN_DELAY;
+}
+
+// Only whatever is practically sitting on the spawn point counts. You come
+// back with a shield anyway, so the point is not to materialise inside
+// something, not to wait for an empty screen.
+static bool centre_is_clear(const Game *g)
+{
+    Vector2 c = { WORLD_W / 2.0f, WORLD_H / 2.0f };
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        const Enemy *e = &g->enemies[i];
+        if (!e->base.alive) continue;
+
+        float dx = c.x - e->base.pos.x, dy = c.y - e->base.pos.y;
+        float r  = e->base.radius + RESPAWN_CLEAR;
+        if (dx * dx + dy * dy >= r * r) continue;
+
+        // Close, but already on its way out: it will not be here any more.
+        if (e->base.vel.x * dx + e->base.vel.y * dy < 0.0f) continue;
+
+        return false;
+    }
+    return true;
 }
 
 static void enemy_behave(Enemy *e, const Game *g, float dt)
@@ -262,36 +296,51 @@ void game_update(Game *g, const Input *in, float dt)
     if (g->paused || g->gameOver) return;
 
     Ship *s = &g->ship;
-    s->base.rot += in->turn * SHIP_TURN_SPEED * dt;
-    s->thrusting = in->thrust;
 
-    if (in->thrust) {
-        Vector2 dir = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
-        s->base.vel.x += dir.x * SHIP_THRUST * dt;
-        s->base.vel.y += dir.y * SHIP_THRUST * dt;
+    if (s->base.alive) {
+        s->base.rot += in->turn * SHIP_TURN_SPEED * dt;
+        s->thrusting = in->thrust;
+
+        if (in->thrust) {
+            Vector2 dir = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
+            s->base.vel.x += dir.x * SHIP_THRUST * dt;
+            s->base.vel.y += dir.y * SHIP_THRUST * dt;
+        }
+
+        float damp = 1.0f - SHIP_DRAG * dt;
+        s->base.vel.x *= damp;
+        s->base.vel.y *= damp;
+
+        entity_integrate(&s->base, dt);
+
+        // The trail comes out of the tail.
+        if (s->thrusting) {
+            Vector2 dir  = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
+            Vector2 tail = { s->base.pos.x - dir.x * 13.0f, s->base.pos.y - dir.y * 13.0f };
+            fx_emit_thrust(&g->fx, tail, dir, s->base.vel);
+        }
+
+        if (s->invuln > 0.0f) {
+            s->invuln -= dt;
+            if (s->invuln < 0.0f) s->invuln = 0.0f;
+        }
+        if (s->fireCooldown > 0.0f) s->fireCooldown -= dt;
+
+        if (in->fire && s->fireCooldown <= 0.0f) fire_bullet(g);
+    } else {
+        // Dead with lives left: wait out the pause, then hold until the centre
+        // is clear. The hard cap keeps a crowded middle from locking you out.
+        s->respawnIn -= dt;
+        s->thrusting  = false;
+
+        if (s->respawnIn <= 0.0f &&
+            (centre_is_clear(g) || s->respawnIn <= -RESPAWN_MAX_WAIT)) {
+            reset_ship(s);
+        }
     }
 
-    float damp = 1.0f - SHIP_DRAG * dt;
-    s->base.vel.x *= damp;
-    s->base.vel.y *= damp;
-
-    entity_integrate(&s->base, dt);
-
-    // Stars drift against the ship's motion; the trail comes out of its tail.
-    fx_update(&g->fx, s->base.vel, dt);
-    if (s->thrusting) {
-        Vector2 dir  = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
-        Vector2 tail = { s->base.pos.x - dir.x * 13.0f, s->base.pos.y - dir.y * 13.0f };
-        fx_emit_thrust(&g->fx, tail, dir, s->base.vel);
-    }
-
-    if (s->invuln > 0.0f) {
-        s->invuln -= dt;
-        if (s->invuln < 0.0f) s->invuln = 0.0f;
-    }
-    if (s->fireCooldown > 0.0f) s->fireCooldown -= dt;
-
-    if (in->fire && s->fireCooldown <= 0.0f) fire_bullet(g);
+    // Stars drift against the ship's motion, and stand still while it is gone.
+    fx_update(&g->fx, s->base.alive ? s->base.vel : (Vector2){ 0.0f, 0.0f }, dt);
 
     for (int i = 0; i < MAX_BULLETS; i++) {
         Bullet *b = &g->bullets[i];
@@ -398,6 +447,17 @@ static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
 
 static void draw_ship_at(const Ship *s, Vector2 pos)
 {
+    // One continuous shield: it shrinks onto the hull, thins out and fades to
+    // nothing over the invulnerable window. No phases, no blinking, so the
+    // remaining time is readable at a glance.
+    if (s->invuln > 0.0f) {
+        float k = s->invuln / SHIP_INVULN;       // 1 on respawn, 0 when it lapses
+        fx_glow_ring(pos,
+                     SHIP_RADIUS + 6.0f + SHIELD_RADIUS * k,
+                     1.2f + SHIELD_THICKNESS * k,
+                     Fade(SKYBLUE, k));
+    }
+
     draw_ship_shape(pos, s->base.rot, 1.0f, RAYWHITE);
 
     // Flash while the cooldown is still fresh: no extra timer needed.
@@ -421,10 +481,18 @@ static void draw_ship_at(const Ship *s, Vector2 pos)
     }
 }
 
+// Gone, but coming back: pulse a red hull on the spawn point. Without it the
+// wait for a clear centre reads as the game hanging instead of holding.
+static void draw_ship_pending(const Ship *s)
+{
+    Vector2 spawn = { WORLD_W / 2.0f, WORLD_H / 2.0f };
+    float   pulse = 0.5f + 0.5f * sinf(s->respawnIn * PENDING_PULSE);
+
+    draw_ship_shape(spawn, -PI / 2.0f, 1.0f, Fade(RED, 0.06f + 0.84f * pulse));
+}
+
 static void draw_ship(const Ship *s)
 {
-    // Blink while invulnerable.
-    if (s->invuln > 0.0f && fmodf(s->invuln, 0.24f) < 0.12f) return;
 
     Vector2 at[4];
     int n = ghost_positions(s->base.pos, s->base.radius, at);
@@ -471,7 +539,9 @@ void game_draw(const Game *g)
         int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
         for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
     }
-    if (g->ship.base.alive) draw_ship(&g->ship);
+    if (g->ship.base.alive)   draw_ship(&g->ship);
+    // Only once the pause is over and something is actually in the way.
+    else if (!g->gameOver && g->ship.respawnIn <= 0.0f) draw_ship_pending(&g->ship);
 
     draw_hud(g);
 
