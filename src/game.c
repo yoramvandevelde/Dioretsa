@@ -16,7 +16,6 @@
 #define BANNER_TIME       (BANNER_HOLD + BANNER_ZOOM)
 #define BANNER_FROM       0.85f     // held width, as a share of the screen
 #define BANNER_TO         2.60f     // final width, well past the edges
-#define BANNER_TRACKING   16.0f     // font size over this is the letter spacing
 
 #define GRAZE_BAND        26.0f     // how far past the hulls still counts
 #define GRAZE_TICK        0.25f     // pays out per quarter second of grazing
@@ -608,15 +607,16 @@ static void draw_banner(const Game *g)
     float alpha = 1.0f - ease;
 
     const char *txt = TextFormat("WAVE %i", g->wave);
-    Font  font    = GetFontDefault();
+    Font  font    = fx_title_font();
+    float track   = fx_title_tracking();
     float probe   = 100.0f;
-    Vector2 m     = MeasureTextEx(font, txt, probe, probe / BANNER_TRACKING);
+    Vector2 m     = MeasureTextEx(font, txt, probe, probe / track);
     float size    = probe * width / m.x;
-    Vector2 dim   = MeasureTextEx(font, txt, size, size / BANNER_TRACKING);
+    Vector2 dim   = MeasureTextEx(font, txt, size, size / track);
 
     DrawTextEx(font, txt,
                (Vector2){ (WORLD_W - dim.x) / 2.0f, (WORLD_H - dim.y) / 2.0f },
-               size, size / BANNER_TRACKING, Fade(RAYWHITE, alpha));
+               size, size / track, Fade(RAYWHITE, alpha));
 }
 
 void game_draw(const Game *g)

@@ -27,7 +27,8 @@ cmake --build build
 - `src/main.c` - window, input and the game loop on a fixed timestep (60 Hz)
 - `src/game.h` - data: `Entity`, `Ship`, `Bullet`, `Enemy`, `EnemyType`, `Game`, `Input`
 - `src/game.c` - update, collisions and drawing
-- `src/fx.h` / `src/fx.c` - star field, particles and the glow helpers
+- `src/fx.h` / `src/fx.c` - star field, particles, glow helpers and the title font
+- `assets/` - Archivo Black, used for the wave title only
 
 The world is 1280x720 and wraps on every edge, exactly one world across.
 Anything straddling an edge is drawn on the far side as well (`ghost_positions`),
@@ -61,6 +62,12 @@ Clearing a wave puts its title on screen: one second standing still at 85% of
 the screen width so it can be read, then one second growing to 260% while it
 fades, which puts it over the game rather than on it. The growth is squared, so
 it starts from a standstill and the hold flows into the rush without a kink.
+
+The title is set in Archivo Black, loaded once after the window opens and used
+for nothing else; the HUD keeps the built-in font. The loader looks next to the
+working directory and next to the executable, and falls back to the built-in
+font if neither turns up, so a missing file costs you the typeface and nothing
+more.
 
 The next wave spawns the moment the zoom starts, and the ship is untouchable
 until the letters clear. Nobody dies to an enemy that came out from behind a
@@ -145,3 +152,8 @@ Star field, thruster trail, debris bursts and vector glow, all in `fx.c`.
 
 Not done yet: sound, impact particles, screen shake, high score, and collisions
 that reach across the world edge.
+
+## Licences
+
+`assets/ArchivoBlack-Regular.ttf` is Archivo Black by Omnibus-Type, under the
+SIL Open Font License 1.1. The licence text sits next to it in `assets/OFL.txt`.

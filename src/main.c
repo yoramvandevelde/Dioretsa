@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "game.h"
+#include "fx.h"
 
 #define FIXED_DT (1.0f / 60.0f)
 
@@ -16,6 +17,7 @@ int main(void)
 {
     InitWindow(WORLD_W, WORLD_H, "astroid v0.2");
     SetTargetFPS(60);
+    fx_load_title_font();
 
     Game game;
     game_init(&game);
@@ -50,6 +52,7 @@ int main(void)
         EndDrawing();
     }
 
+    fx_unload_title_font();
     CloseWindow();
     return 0;
 }

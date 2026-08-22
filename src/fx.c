@@ -37,6 +37,51 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 // Effects run on their own xorshift instead of raylib's GetRandomValue, so
 // spawning particles never shifts the random stream the gameplay draws from.
 // Same input, same run, effects on or off.
+#define TITLE_FONT_SIZE   220       // atlas size; the banner scales down from here
+
+static Font  titleFont     = { 0 };
+static bool  titleLoaded   = false;
+
+void fx_load_title_font(void)
+{
+    // Run from the repo root or from the build directory, either is fine.
+    const char *candidates[] = {
+        "assets/ArchivoBlack-Regular.ttf",
+        TextFormat("%s../assets/ArchivoBlack-Regular.ttf", GetApplicationDirectory()),
+    };
+
+    for (int i = 0; i < 2; i++) {
+        if (!FileExists(candidates[i])) continue;
+
+        titleFont = LoadFontEx(candidates[i], TITLE_FONT_SIZE, NULL, 0);
+        if (titleFont.texture.id == 0) continue;
+
+        SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
+        titleLoaded = true;
+        return;
+    }
+    TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
+}
+
+void fx_unload_title_font(void)
+{
+    if (!titleLoaded) return;
+    UnloadFont(titleFont);
+    titleLoaded = false;
+}
+
+Font fx_title_font(void)
+{
+    return titleLoaded ? titleFont : GetFontDefault();
+}
+
+// The built-in font carries its own padding, so it needs far looser spacing
+// than a real typeface does.
+float fx_title_tracking(void)
+{
+    return titleLoaded ? 42.0f : 16.0f;
+}
+
 static float frand(Fx *fx, float lo, float hi)
 {
     fx->rng ^= fx->rng << 13;

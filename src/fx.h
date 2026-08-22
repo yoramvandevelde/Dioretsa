@@ -41,6 +41,14 @@ typedef struct {
     unsigned int rng;   // effects roll their own dice, see fx.c
 } Fx;
 
+// The title font is loaded once, after the window exists, and lives in fx
+// rather than in any Fx instance: it is a GPU resource, not game state.
+// Everything keeps working on the built-in font if the file is missing.
+void fx_load_title_font(void);
+void fx_unload_title_font(void);
+Font fx_title_font(void);
+float fx_title_tracking(void);   // font size over this is the letter spacing
+
 void fx_init(Fx *fx);
 
 // referenceVel is what the stars drift against: pass the ship's velocity and
