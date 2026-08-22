@@ -22,6 +22,9 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 #define MUZZLE_LIFE_MIN   0.05f
 #define MUZZLE_LIFE_MAX   0.14f
 
+#define POP_LIFE          0.85f
+#define POP_RISE          46.0f     // pixels per second the number drifts up
+
 #define DEBRIS_LIFE_MIN   0.35f
 #define DEBRIS_LIFE_MAX   0.90f
 
@@ -88,6 +91,14 @@ void fx_update(Fx *fx, Vector2 referenceVel, float dt)
             s->pos.y -= referenceVel.y * f * dt;
             wrap_world(&s->pos);
         }
+    }
+
+    for (int i = 0; i < MAX_SCORE_POPS; i++) {
+        ScorePop *sp = &fx->pops[i];
+        if (sp->life <= 0.0f) continue;
+
+        sp->life  -= dt;
+        sp->pos.y -= POP_RISE * dt;
     }
 
     for (int i = 0; i < MAX_PARTICLES; i++) {
@@ -181,6 +192,37 @@ void fx_emit_burst(Fx *fx, Vector2 pos, Vector2 inheritVel, Color color,
         p->size    = frand(fx, 1.4f, 2.8f);
         p->color   = color;
         p->fadeTo  = dim(color, 0.35f);
+    }
+}
+
+void fx_emit_score(Fx *fx, Vector2 pos, int value)
+{
+    // Reuse the shortest-lived slot when they all sit busy, so the newest
+    // number always gets shown.
+    ScorePop *sp = &fx->pops[0];
+    for (int i = 1; i < MAX_SCORE_POPS; i++) {
+        if (fx->pops[i].life < sp->life) sp = &fx->pops[i];
+    }
+
+    sp->pos     = (Vector2){ pos.x, pos.y - 24.0f };
+    sp->maxLife = POP_LIFE;
+    sp->life    = POP_LIFE;
+    sp->value   = value;
+}
+
+void fx_draw_scores(const Fx *fx)
+{
+    for (int i = 0; i < MAX_SCORE_POPS; i++) {
+        const ScorePop *sp = &fx->pops[i];
+        if (sp->life <= 0.0f) continue;
+
+        // Bigger rewards land bigger, and everything fades as it rises.
+        float t    = sp->life / sp->maxLife;
+        int   size = (sp->value >= 200) ? 30 : (sp->value >= 60) ? 24 : 18;
+
+        const char *txt = TextFormat("+%i", sp->value);
+        DrawText(txt, (int)sp->pos.x - MeasureText(txt, size) / 2, (int)sp->pos.y,
+                 size, Fade(GOLD, t));
     }
 }
 

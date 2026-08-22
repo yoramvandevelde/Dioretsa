@@ -44,16 +44,41 @@ All balancing sits in `ENEMY_TYPES` at the top of `src/game.c`: side count,
 radius, speed, colour, score, behaviour and what it splits into. A new type is
 one line in the `EnemyTypeId` enum plus one row in that table, nothing else.
 
-| Type     | Sides | Splits into  | Score |
-| -------- | ----- | ------------ | ----- |
-| hexagon  | 6     | 2x pentagon  | 20    |
-| pentagon | 5     | 2x square    | 50    |
-| square   | 4     | 2x triangle  | 100   |
-| triangle | 3     | nothing      | 200   |
+| Type     | Sides | Splits into  | Score | Graze |
+| -------- | ----- | ------------ | ----- | ----- |
+| hexagon  | 6     | 2x pentagon  | 20    | 1     |
+| pentagon | 5     | 2x square    | 50    | 4     |
+| square   | 4     | 2x triangle  | 100   | 12    |
+| triangle | 3     | nothing      | 200   | 40    |
 
 Shapes are regular polygons drawn with `DrawPolyLines`, so all sides are equal.
 Behaviour lives in `enemy_behave()`: `DRIFT` (straight line), `SPINNER` (tumbles
 faster) and `SEEK` (steers towards the ship, as the triangle does).
+
+## Grazing
+
+Flying close pays. Every 0.25s spent inside a band 26 px beyond the hulls pays
+the sum of the graze values in range, multiplied by how many are in range at
+once (capped at four). The timer resets the moment you leave, so partial ticks
+cannot be banked across passes.
+
+| what | points per second |
+| ---- | ----------------- |
+| one hexagon | 4 |
+| one pentagon | 16 |
+| one square | 48 |
+| one triangle | 160 |
+| four triangles at once | 2560 |
+
+Two conditions, and no others: you are inside the band, and your shield is
+down. Invulnerability means no risk, so it pays nothing.
+
+Staying alongside on purpose counts as well. An earlier rule required relative
+movement to stop players parking next to something, but from the cockpit that
+was invisible: the same gap paid while flying past and stopped paying the
+moment you turned to follow. The real cost of chasing is attention, not the
+rule. You are steering at one object while the rest of the field keeps moving,
+and a triangle accelerates into you the moment you try.
 
 ## Effects
 

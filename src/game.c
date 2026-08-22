@@ -8,6 +8,10 @@
 #define SHIP_DRAG         0.6f      // per second
 #define SHIP_RADIUS       14.0f
 #define SHIP_INVULN       2.0f      // seconds of invulnerability after respawn
+#define GRAZE_BAND        26.0f     // how far past the hulls still counts
+#define GRAZE_TICK        0.25f     // pays out per quarter second of grazing
+#define GRAZE_MULT_CAP    4         // a crowd is not the same as a stunt
+
 #define PENDING_PULSE     6.0f      // rad/s of the waiting-to-respawn pulse
 #define SHIELD_RADIUS     78.0f     // how far out the shield starts
 #define SHIELD_THICKNESS  7.0f      // band width at full strength
@@ -29,13 +33,13 @@
 // All enemy balancing lives here. The split chain runs large to small:
 // hexagon -> pentagon -> square -> triangle -> gone.
 static const EnemyType ENEMY_TYPES[ENEMY_TYPE_COUNT] = {
-    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, LIGHTGRAY,  20,
+    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, LIGHTGRAY,  20, 1,
                          BEHAVIOR_DRIFT,   ENEMY_PENTA,    2 },
-    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, SKYBLUE,    50,
+    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, SKYBLUE,    50, 4,
                          BEHAVIOR_DRIFT,   ENEMY_SQUARE,   2 },
-    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, GOLD,      100,
+    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, GOLD,      100, 12,
                          BEHAVIOR_SPINNER, ENEMY_TRIANGLE, 2 },
-    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, RED,       200,
+    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, RED,       200, 40,
                          BEHAVIOR_SEEK,   -1,             0 },
 };
 
@@ -182,6 +186,7 @@ static void reset_ship(Ship *s)
     s->invuln       = SHIP_INVULN;
     s->fireCooldown = 0.0f;
     s->respawnIn    = 0.0f;
+    s->grazeTimer   = 0.0f;
 }
 
 void game_init(Game *g)
@@ -398,6 +403,46 @@ void game_update(Game *g, const Input *in, float dt)
         }
     }
 
+    // Grazing: flying close pays, but only without a shield up. With
+    // invulnerability there is no risk, so there must be no reward either.
+    //
+    // Staying alongside on purpose pays too. Guarding against that cost more in
+    // confusion than it saved: pacing a grey is 4 points a second, and a red
+    // accelerates into you the moment you try.
+    if (s->base.alive && s->invuln <= 0.0f) {
+        int sum = 0, count = 0;
+
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            const Enemy *e = &g->enemies[i];
+            if (!e->base.alive) continue;
+
+            float dx = e->base.pos.x - s->base.pos.x;
+            float dy = e->base.pos.y - s->base.pos.y;
+            float outer = e->base.radius + s->base.radius + GRAZE_BAND;
+            if (dx * dx + dy * dy >= outer * outer) continue;
+
+            sum += ENEMY_TYPES[e->type].graze;
+            count++;
+        }
+
+        if (count > 0) {
+            s->grazeTimer += dt;
+            if (s->grazeTimer >= GRAZE_TICK) {
+                s->grazeTimer -= GRAZE_TICK;
+
+                int mult  = (count > GRAZE_MULT_CAP) ? GRAZE_MULT_CAP : count;
+                int award = sum * mult;
+
+                g->score += award;
+                fx_emit_score(&g->fx, s->base.pos, award);
+            }
+        } else {
+            s->grazeTimer = 0.0f;   // no partial ticks banked between passes
+        }
+    } else {
+        s->grazeTimer = 0.0f;
+    }
+
     if (enemies_alive(g) == 0) {
         g->wave++;
         spawn_wave(g);
@@ -543,6 +588,7 @@ void game_draw(const Game *g)
     // Only once the pause is over and something is actually in the way.
     else if (!g->gameOver && g->ship.respawnIn <= 0.0f) draw_ship_pending(&g->ship);
 
+    fx_draw_scores(&g->fx);
     draw_hud(g);
 
     if (g->paused) {

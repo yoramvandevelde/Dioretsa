@@ -31,6 +31,7 @@ typedef struct {
     float  invuln;          // seconds of invulnerability left after respawn
     float  fireCooldown;
     float  respawnIn;       // counts down while dead, then waits for a clear centre
+    float  grazeTimer;      // time spent inside a graze band, reset on leaving
 } Ship;
 
 typedef struct {
@@ -61,6 +62,7 @@ typedef struct {
     float       spin;               // rad/s, sign randomised on spawn
     Color       color;
     int         score;
+    int         graze;              // payout per graze tick, steeply per type
     Behavior    behavior;
     int         splitInto;          // EnemyTypeId, or -1 for no remains
     int         splitCount;
