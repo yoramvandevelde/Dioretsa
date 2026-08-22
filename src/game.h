@@ -33,7 +33,8 @@ typedef struct {
     float  invuln;          // seconds of invulnerability left after respawn
     float  fireCooldown;
     float  respawnIn;       // counts down while dead, then waits for a clear centre
-    float  grazeTimer;      // time spent inside a graze band, reset on leaving
+    float  grazeTimer;      // time towards the next graze payout, reset on leaving
+    float  grazeStreak;     // how long this pass has lasted, for the longest-dance stat
 } Ship;
 
 typedef struct {
@@ -85,6 +86,22 @@ typedef struct {
     int         hp;                 // room for tougher types later
 } Enemy;
 
+// Everything here is a counter on a line of code that already existed. The
+// point is not completeness but what it says about how you played.
+typedef struct {
+    float time;                         // seconds survived
+    float distance;                     // pixels flown
+    int   kills[ENEMY_TYPE_COUNT];
+    int   deathsBy[ENEMY_TYPE_COUNT];   // which type finished you off
+    int   shots, hits;
+    int   deaths;
+    int   pickupLife, pickupBonus, pickupMissed;
+    int   scoreShot, scoreGraze;        // where the points came from
+    int   bestMult;                     // most enemies grazed at once
+    float bestGraze;                    // longest unbroken graze, seconds
+    float closest;                      // smallest gap survived, pixels
+} Stats;
+
 typedef struct {
     Ship     ship;
     Enemy    enemies[MAX_ENEMIES];  // slots: use base.alive, not a count
@@ -95,6 +112,7 @@ typedef struct {
     int      wave;
     float    banner;                // counts down while the wave title is up
     float    waveDelay;             // breather before the next wave spawns
+    Stats    stats;
     bool     paused;
     bool     gameOver;
     Fx       fx;                    // cosmetic only, never read by the rules

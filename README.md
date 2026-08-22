@@ -176,6 +176,23 @@ starting and stopping a sound on every tap clicks and rattles, a ramp does not.
 Its pitch follows your speed against terminal velocity, and it sits well under
 everything else because it plays constantly.
 
+## The report
+
+Dying opens a report rather than a dimmed field: four headline figures across
+the top, the title across the middle, and four columns of detail underneath.
+Every number is a counter on a line that already existed, so tracking them costs
+the game nothing.
+
+Kills and deaths are both broken down per enemy type, which is what makes them
+worth reading side by side: two hundred triangles killed, and four deaths to
+them. The dance column reports the best multiplier, the longest unbroken graze,
+how much of the score came from grazing rather than shooting, and the closest
+you came to something and lived.
+
+Text is drawn at multiples of ten because the built-in font has a base size of
+10. Anything else stretches its pixels unevenly and reads as slightly blurred,
+which is easy to mistake for the font simply being wrong.
+
 ## Effects
 
 `Fx` is cosmetic state, held inside `Game` so it freezes on pause and resets on

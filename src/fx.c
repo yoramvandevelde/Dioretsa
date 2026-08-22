@@ -258,7 +258,7 @@ void fx_draw_scores(const Fx *fx)
 
         // Bigger rewards land bigger, and everything fades as it rises.
         float t    = sp->life / sp->maxLife;
-        int   size = (sp->value >= 200) ? 30 : (sp->value >= 60) ? 24 : 18;
+        int   size = (sp->value >= 200) ? 40 : (sp->value >= 60) ? 30 : 20;
 
         const char *txt = TextFormat("+%i", sp->value);
         DrawText(txt, (int)sp->pos.x - MeasureText(txt, size) / 2, (int)sp->pos.y,

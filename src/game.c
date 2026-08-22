@@ -270,6 +270,7 @@ static void reset_ship(Ship *s)
     s->fireCooldown = 0.0f;
     s->respawnIn    = 0.0f;
     s->grazeTimer   = 0.0f;
+    s->grazeStreak  = 0.0f;
 }
 
 void game_init(Game *g)
@@ -283,6 +284,7 @@ void game_init(Game *g)
 
     reset_ship(&g->ship);
     fx_init(&g->fx);
+    g->stats.closest = 1e9f;        // nothing measured yet
     g->lives  = START_LIVES;
     g->wave   = 1;
     g->banner    = BANNER_TIME;
@@ -315,12 +317,14 @@ static void fire_bullet(Game *g)
     fx_emit_muzzle(&g->fx, b->base.pos, dir, s->base.vel);
 
     audio_play_at(SND_SHOT, pan_of(s->base.pos.x), audio_pitch_jitter(0.06f));
+    g->stats.shots++;
 
     g->ship.fireCooldown = FIRE_COOLDOWN;
 }
 
 static void kill_ship(Game *g)
 {
+    g->stats.deaths++;
     audio_play_at(SND_CRASH, pan_of(g->ship.base.pos.x), 1.0f);
     fx_emit_burst(&g->fx, g->ship.base.pos, g->ship.base.vel, RAYWHITE, 28, 200.0f);
 
@@ -398,6 +402,8 @@ void game_update(Game *g, const Input *in, float dt)
         return;
     }
 
+    g->stats.time += dt;
+
     Ship *s = &g->ship;
 
     if (s->base.alive) {
@@ -412,6 +418,7 @@ void game_update(Game *g, const Input *in, float dt)
 
         // Terminal velocity is thrust over drag; the engine note follows it.
         float speed = sqrtf(s->base.vel.x * s->base.vel.x + s->base.vel.y * s->base.vel.y);
+        g->stats.distance += speed * dt;
         audio_set_engine((EngineState){
             .thrusting = in->thrust,
             .speed     = speed / (SHIP_THRUST / SHIP_DRAG),
@@ -489,6 +496,10 @@ void game_update(Game *g, const Input *in, float dt)
             e->base.alive = false;
             g->score += ENEMY_TYPES[e->type].score;
 
+            g->stats.hits++;
+            g->stats.kills[e->type]++;
+            g->stats.scoreShot += ENEMY_TYPES[e->type].score;
+
             const EnemyType *t = &ENEMY_TYPES[e->type];
             fx_emit_burst(&g->fx, e->base.pos, e->base.vel, t->color,
                           6 + t->sides * 3, 40.0f + e->base.radius * 2.2f);
@@ -514,6 +525,7 @@ void game_update(Game *g, const Input *in, float dt)
             if (!e->base.alive) continue;
             if (!entity_hit(&s->base, &e->base)) continue;
 
+            g->stats.deathsBy[e->type]++;
             kill_ship(g);
             break;
         }
@@ -524,7 +536,7 @@ void game_update(Game *g, const Input *in, float dt)
         if (!p->base.alive) continue;
 
         p->life -= dt;
-        if (p->life <= 0.0f) { p->base.alive = false; continue; }
+        if (p->life <= 0.0f) { p->base.alive = false; g->stats.pickupMissed++; continue; }
 
         // Coast to a halt over its lifetime. A triangle can be doing 225 px/s
         // when it dies, and a pickup carrying that speed is not catchable.
@@ -537,10 +549,12 @@ void game_update(Game *g, const Input *in, float dt)
         p->base.alive = false;
         if (g->lives < START_LIVES) {
             g->lives++;
+            g->stats.pickupLife++;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, LIME, 26, 150.0f);
             audio_play_at(SND_PICKUP_1UP, pan_of(p->base.pos.x), 1.0f);
         } else {
             g->score += PICKUP_BONUS;
+            g->stats.pickupBonus++;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, GOLD, 26, 150.0f);
             fx_emit_score(&g->fx, p->base.pos, PICKUP_BONUS);
             audio_play_at(SND_PICKUP_COIN, pan_of(p->base.pos.x), 1.0f);
@@ -565,12 +579,18 @@ void game_update(Game *g, const Input *in, float dt)
             float outer = e->base.radius + s->base.radius + GRAZE_BAND;
             if (dx * dx + dy * dy >= outer * outer) continue;
 
+            // The closest you came to something and lived.
+            float gap = sqrtf(dx * dx + dy * dy) - e->base.radius - s->base.radius;
+            if (gap < g->stats.closest) g->stats.closest = gap;
+
             sum += ENEMY_TYPES[e->type].graze;
             count++;
         }
 
         if (count > 0) {
             s->grazeTimer += dt;
+            s->grazeStreak += dt;
+            if (s->grazeStreak > g->stats.bestGraze) g->stats.bestGraze = s->grazeStreak;
             if (s->grazeTimer >= GRAZE_TICK) {
                 s->grazeTimer -= GRAZE_TICK;
 
@@ -578,6 +598,8 @@ void game_update(Game *g, const Input *in, float dt)
                 int award = sum * mult;
 
                 g->score += award;
+                g->stats.scoreGraze += award;
+                if (mult > g->stats.bestMult) g->stats.bestMult = mult;
                 fx_emit_score(&g->fx, s->base.pos, award);
 
                 // Pitch climbs with the crowd, so threading four reds sounds
@@ -586,10 +608,12 @@ void game_update(Game *g, const Input *in, float dt)
                               1.0f + 0.12f * (float)(mult - 1));
             }
         } else {
-            s->grazeTimer = 0.0f;   // no partial ticks banked between passes
+            s->grazeTimer  = 0.0f;  // no partial ticks banked between passes
+            s->grazeStreak = 0.0f;
         }
     } else {
-        s->grazeTimer = 0.0f;
+        s->grazeTimer  = 0.0f;
+        s->grazeStreak = 0.0f;
     }
 
     if (g->banner > 0.0f) g->banner -= dt;
@@ -744,20 +768,93 @@ static void draw_pickup(const Pickup *p, bool givesLife)
 
 static void draw_hud(const Game *g)
 {
-    DrawText(TextFormat("%06i", g->score), 20, 18, 28, RAYWHITE);
+    DrawText(TextFormat("%06i", g->score), 20, 16, 30, RAYWHITE);
 
     const char *wave = TextFormat("WAVE %i", g->wave);
     DrawText(wave, WORLD_W / 2 - MeasureText(wave, 20) / 2, 22, 20, GRAY);
 
     // God mode takes the place of the lives, since there is nothing to count.
     if (godMode) {
-        DrawText("GOD", WORLD_W - 20 - MeasureText("GOD", 28), 18, 28, RED);
+        DrawText("GOD", WORLD_W - 20 - MeasureText("GOD", 30), 16, 30, RED);
         return;
     }
 
     for (int i = 0; i < g->lives; i++) {
         Vector2 p = { (float)(WORLD_W - 34 - i * 30), 34.0f };
         draw_ship_shape(p, -PI / 2.0f, 0.9f, RAYWHITE);
+    }
+}
+
+// One line of the report: label left, value right, inside a column.
+static void stat_row(int x, int y, int width, const char *label, const char *value)
+{
+    DrawText(label, x, y, 20, GRAY);
+    DrawText(value, x + width - MeasureText(value, 20), y, 20, RAYWHITE);
+}
+
+// A headline figure with its name underneath, for the row along the top.
+static void stat_headline(int centre, int y, const char *value, const char *label)
+{
+    DrawText(value, centre - MeasureText(value, 40) / 2, y, 40, RAYWHITE);
+    DrawText(label, centre - MeasureText(label, 20) / 2, y + 46, 20, GRAY);
+}
+
+static void draw_report(const Game *g)
+{
+    const Stats *st = &g->stats;
+
+    // Top row: how the run went, in four numbers.
+    int mins = (int)st->time / 60, secs = (int)st->time % 60;
+    stat_headline(190,  70, TextFormat("%06i", g->score),        "SCORE");
+    stat_headline(555,  70, TextFormat("%i", g->wave),           "WAVE REACHED");
+    stat_headline(880,  70, TextFormat("%i:%02i", mins, secs),   "TIME SURVIVED");
+    stat_headline(1130, 70, TextFormat("%i", st->deaths),        "DEATHS");
+
+    // Bottom: four columns of detail.
+    const int col[4] = { 60, 370, 680, 990 };
+    const int w = 250, top = 470, step = 28;
+    int total = 0;
+    for (int i = 0; i < ENEMY_TYPE_COUNT; i++) total += st->kills[i];
+
+    DrawText("KILLS", col[0], top, 20, DARKGRAY);
+    for (int i = ENEMY_TYPE_COUNT - 1, r = 1; i >= 0; i--, r++) {
+        stat_row(col[0], top + r * step, w, enemy_type(i)->name, TextFormat("%i", st->kills[i]));
+    }
+    stat_row(col[0], top + 5 * step, w, "total", TextFormat("%i", total));
+
+    int accuracy = st->shots ? (100 * st->hits) / st->shots : 0;
+    DrawText("SHOOTING", col[1], top, 20, DARKGRAY);
+    stat_row(col[1], top + 1 * step, w, "shots fired", TextFormat("%i", st->shots));
+    stat_row(col[1], top + 2 * step, w, "hits",        TextFormat("%i", st->hits));
+    stat_row(col[1], top + 3 * step, w, "accuracy",    TextFormat("%i%%", accuracy));
+    stat_row(col[1], top + 4 * step, w, "shots per kill",
+             TextFormat("%.1f", total ? (float)st->shots / total : 0.0f));
+
+    int fromGraze = (g->score > 0) ? (100 * st->scoreGraze) / g->score : 0;
+    DrawText("THE DANCE", col[2], top, 20, DARKGRAY);
+    stat_row(col[2], top + 1 * step, w, "best multiplier",
+             st->bestMult ? TextFormat("x%i", st->bestMult) : "-");
+    stat_row(col[2], top + 2 * step, w, "longest graze",   TextFormat("%.1fs", st->bestGraze));
+    stat_row(col[2], top + 3 * step, w, "score from grazing", TextFormat("%i%%", fromGraze));
+    stat_row(col[2], top + 4 * step, w, "closest call",
+             (st->closest < 1e8f) ? TextFormat("%.0f px", st->closest) : "-");
+
+    DrawText("PICKUPS", col[3], top, 20, DARKGRAY);
+    stat_row(col[3], top + 1 * step, w, "lives taken",  TextFormat("%i", st->pickupLife));
+    stat_row(col[3], top + 2 * step, w, "bonuses taken", TextFormat("%i", st->pickupBonus));
+    stat_row(col[3], top + 3 * step, w, "let slip",     TextFormat("%i", st->pickupMissed));
+    stat_row(col[3], top + 4 * step, w, "distance",
+             TextFormat("%.1f screens", st->distance / WORLD_W));
+
+    // Whichever type finished you off most often gets named.
+    int worst = -1;
+    for (int i = 0; i < ENEMY_TYPE_COUNT; i++) {
+        if (worst < 0 || st->deathsBy[i] > st->deathsBy[worst]) worst = i;
+    }
+    if (worst >= 0 && st->deathsBy[worst] > 0) {
+        const char *line = TextFormat("most dangerous: %s, %i of your %i deaths",
+                                      enemy_type(worst)->name, st->deathsBy[worst], st->deaths);
+        DrawText(line, WORLD_W / 2 - MeasureText(line, 20) / 2, top + 6 * step, 20, GRAY);
     }
 }
 
@@ -836,14 +933,17 @@ void game_draw(const Game *g)
         draw_title("PAUSED", 0.9f, 0.0f, RAYWHITE);
     }
     if (g->gameOver) {
-        DrawRectangle(0, 0, WORLD_W, WORLD_H, Fade(BLACK, 0.45f));
+        // A report wants a dark page, not a dimmed game.
+        DrawRectangle(0, 0, WORLD_W, WORLD_H, Fade(BLACK, 0.88f));
 
         // The statement is set in the title face, the instruction is not: they
         // are different kinds of message and should not look alike.
         float h = draw_title("GAME OVER", 0.92f, -30.0f, RAYWHITE);
 
+        (void)h;
+        draw_report(g);
+
         const char *hint = "press R";
-        DrawText(hint, WORLD_W / 2 - MeasureText(hint, 22) / 2,
-                 (int)(WORLD_H / 2.0f - 30.0f + h / 2.0f + 26.0f), 22, GRAY);
+        DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H - 42, 20, RAYWHITE);
     }
 }
