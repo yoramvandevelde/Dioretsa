@@ -1,5 +1,7 @@
 # Notes
 
+*** This file is used as a scratchpad for ideas and choices. Some might spoil things you could find out on your own ***
+
 How Dioretsa is put together, and why. The README is for playing it; this is for
 working on it.
 
@@ -25,6 +27,12 @@ sitting in `assets/` never travel with a release.
 At startup the executable tries, in order: `assets/` in the working directory,
 `assets/` beside itself, one level up, and inside a macOS bundle. Nothing is
 linked or baked in; whichever exists first wins.
+
+Releases are cut by pushing a date tag, `YYYY.MM.DD`, with `-2` and up for a
+second release on the same day. That fires `.github/workflows/release.yml`,
+which builds macOS, Linux and Windows, packages each with the tracked assets,
+and publishes them to a GitHub release. Every pull request and every push to
+main builds all three the same way, so a platform cannot quietly rot.
 
 ## Layout
 

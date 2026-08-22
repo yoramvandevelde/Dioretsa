@@ -43,7 +43,12 @@ add_executable(dioretsa
 
 target_include_directories(dioretsa PRIVATE src)
 target_link_libraries(dioretsa PRIVATE raylib)
-target_compile_options(dioretsa PRIVATE -Wall -Wextra -Wno-unused-parameter)
+# MSVC does not speak GCC's warning flags, and the Windows runner is MSVC.
+if(MSVC)
+    target_compile_options(dioretsa PRIVATE /W3)
+else()
+    target_compile_options(dioretsa PRIVATE -Wall -Wextra -Wno-unused-parameter)
+endif()
 
 if(APPLE)
     target_link_libraries(dioretsa PRIVATE

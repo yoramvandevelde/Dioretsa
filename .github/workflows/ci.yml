@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  # A merge lands as a push to main, so this covers merged pull requests too.
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false        # one platform breaking should not hide the others
+      matrix:
+        include:
+          - { os: macos-latest,   name: macOS }
+          - { os: ubuntu-latest,  name: Linux }
+          - { os: windows-latest, name: Windows }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # raylib compiles against the X11, Wayland and audio headers, which are
+      # not on a bare runner. Everything else comes with the image.
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
+            libwayland-dev libxkbcommon-dev
+
+      # SELF_CONTAINED builds raylib from source, which is what a release does
+      # and therefore what CI should prove still works.
+      - name: Configure
+        run: cmake -B build -DSELF_CONTAINED=ON -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release

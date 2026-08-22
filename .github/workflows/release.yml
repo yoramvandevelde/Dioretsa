@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "20[0-9][0-9].[0-1][0-9].[0-3][0-9]*"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest,   name: macOS,   platform: macos }
+          - { os: ubuntu-latest,  name: Linux,   platform: linux }
+          - { os: windows-latest, name: Windows, platform: windows }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The tag glob above only supports character classes, not alternation, so
+      # it cannot rule out a month of 19 or a day of 39 on its own. This checks
+      # the tag properly before any build work happens.
+      - name: Validate tag is a real YYYY.MM.DD date
+        shell: bash
+        run: |
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^20[0-9]{2}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(-[0-9]+)?$ ]]; then
+            echo "Tag '${GITHUB_REF_NAME}' is not a valid YYYY.MM.DD[-N] date" >&2
+            exit 1
+          fi
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
+            libwayland-dev libxkbcommon-dev
+
+      # raylib is compiled from source and linked statically, so what comes out
+      # runs on a machine that has none of this installed. On macOS that also
+      # builds both architectures into one binary.
+      - name: Build
+        run: |
+          cmake -B build -DSELF_CONTAINED=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      # Packaging mirrors the bundle-mac recipe in the justfile: the executable
+      # plus the tracked assets, nothing else. git ls-files is what keeps
+      # scratch files in assets/ from travelling with a release.
+      - name: Package
+        shell: bash
+        run: |
+          out="dioretsa-${GITHUB_REF_NAME}-${{ matrix.platform }}"
+          mkdir -p "dist/$out"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cp build/Release/dioretsa.exe "dist/$out/"
+          else
+            cp build/dioretsa "dist/$out/"
+          fi
+          git ls-files assets | while read -r f; do
+            mkdir -p "dist/$out/$(dirname "$f")"
+            cp "$f" "dist/$out/$f"
+          done
+          cp README.md "dist/$out/"
+          # The Windows runner has 7-Zip but no zip, the other two have zip.
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            (cd dist && 7z a -tzip -bso0 "$out.zip" "$out")
+          else
+            (cd dist && zip -qr "$out.zip" "$out")
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dioretsa-${{ matrix.platform }}
+          path: dist/*.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
