@@ -21,6 +21,7 @@ endif()
 add_executable(astroid
     src/main.c
     src/game.c
+    src/fx.c
 )
 
 target_include_directories(astroid PRIVATE src)

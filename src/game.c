@@ -176,6 +176,7 @@ void game_init(Game *g)
     *g = (Game){ 0 };
 
     reset_ship(&g->ship);
+    fx_init(&g->fx);
     g->lives = START_LIVES;
     g->wave  = 1;
     spawn_wave(g);
@@ -205,6 +206,8 @@ static void fire_bullet(Game *g)
 
 static void kill_ship(Game *g)
 {
+    fx_emit_burst(&g->fx, g->ship.base.pos, g->ship.base.vel, RAYWHITE, 28, 200.0f);
+
     g->lives--;
     if (g->lives <= 0) {
         g->lives           = 0;
@@ -264,6 +267,14 @@ void game_update(Game *g, const Input *in, float dt)
 
     entity_integrate(&s->base, dt);
 
+    // Stars drift against the ship's motion; the trail comes out of its tail.
+    fx_update(&g->fx, s->base.vel, dt);
+    if (s->thrusting) {
+        Vector2 dir  = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
+        Vector2 tail = { s->base.pos.x - dir.x * 13.0f, s->base.pos.y - dir.y * 13.0f };
+        fx_emit_thrust(&g->fx, tail, dir, s->base.vel);
+    }
+
     if (s->invuln > 0.0f) {
         s->invuln -= dt;
         if (s->invuln < 0.0f) s->invuln = 0.0f;
@@ -305,6 +316,11 @@ void game_update(Game *g, const Input *in, float dt)
 
             e->base.alive = false;
             g->score += ENEMY_TYPES[e->type].score;
+
+            const EnemyType *t = &ENEMY_TYPES[e->type];
+            fx_emit_burst(&g->fx, e->base.pos, e->base.vel, t->color,
+                          6 + t->sides * 3, 40.0f + e->base.radius * 2.2f);
+
             split_enemy(g, e);
             break;
         }
@@ -343,7 +359,7 @@ static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
         p[i] = (Vector2){ pos.x + r.x, pos.y + r.y };
     }
     p[3] = p[0];
-    DrawLineStrip(p, 4, color);
+    fx_glow_strip(p, 4, color);
 }
 
 static void draw_ship(const Ship *s)
@@ -362,14 +378,14 @@ static void draw_ship(const Ship *s)
             { s->base.pos.x + flame.x, s->base.pos.y + flame.y },
             { s->base.pos.x + back2.x, s->base.pos.y + back2.y },
         };
-        DrawLineStrip(f, 3, ORANGE);
+        fx_glow_strip(f, 3, ORANGE);
     }
 }
 
 static void draw_enemy(const Enemy *e)
 {
     const EnemyType *t = &ENEMY_TYPES[e->type];
-    DrawPolyLines(e->base.pos, t->sides, e->base.radius, e->base.rot * RAD2DEG, t->color);
+    fx_glow_poly(e->base.pos, t->sides, e->base.radius, e->base.rot * RAD2DEG, t->color);
 }
 
 static void draw_hud(const Game *g)
@@ -387,11 +403,15 @@ static void draw_hud(const Game *g)
 
 void game_draw(const Game *g)
 {
+    fx_draw_stars(&g->fx);
+
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
     }
+
+    fx_draw_particles(&g->fx);      // behind the ship, on top of the world
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (g->bullets[i].base.alive) DrawCircleV(g->bullets[i].base.pos, BULLET_RADIUS, RAYWHITE);
+        if (g->bullets[i].base.alive) fx_glow_dot(g->bullets[i].base.pos, BULLET_RADIUS, RAYWHITE);
     }
     if (g->ship.base.alive) draw_ship(&g->ship);
 

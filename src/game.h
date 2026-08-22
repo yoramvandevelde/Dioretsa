@@ -3,6 +3,8 @@
 
 #include "raylib.h"
 
+#include "fx.h"
+
 #define WORLD_W 1280
 #define WORLD_H 720
 
@@ -78,6 +80,7 @@ typedef struct {
     int      wave;
     bool     paused;
     bool     gameOver;
+    Fx       fx;                    // cosmetic only, never read by the rules
 } Game;
 
 // Input sampled once per frame, keeping the game logic free of raylib.
