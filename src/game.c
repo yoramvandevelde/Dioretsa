@@ -193,16 +193,32 @@ static Vector2 safe_spawn_pos(const Game *g)
     return p;
 }
 
+// Hand-authored wave composition. The mix shifts from big and slow to small
+// and fast while the total number of kills stays roughly level, so later waves
+// are harder without being more of the same. The last row repeats forever.
+static const struct {
+    int hexa, penta, square;
+} WAVES[] = {
+    { 4, 0, 0 },    // wave 1
+    { 4, 1, 0 },
+    { 3, 2, 0 },
+    { 3, 3, 1 },
+    { 2, 4, 2 },
+    { 2, 5, 3 },
+    { 1, 5, 4 },
+    { 0, 5, 5 },    // wave 8 and up: straight into the deep end
+};
+#define WAVE_COUNT ((int)(sizeof(WAVES) / sizeof(WAVES[0])))
+
 static void spawn_wave(Game *g)
 {
-    int big = 3 + g->wave;
-    if (big > 8) big = 8;
-    for (int i = 0; i < big; i++) spawn_enemy(g, safe_spawn_pos(g), ENEMY_HEXA);
+    int row = g->wave - 1;
+    if (row < 0)           row = 0;
+    if (row >= WAVE_COUNT) row = WAVE_COUNT - 1;
 
-    // From wave 3 on, add loose small ones that did not come from a split.
-    int extra = g->wave - 2;
-    if (extra > 3) extra = 3;
-    for (int i = 0; i < extra; i++) spawn_enemy(g, safe_spawn_pos(g), ENEMY_SQUARE);
+    for (int i = 0; i < WAVES[row].hexa; i++)   spawn_enemy(g, safe_spawn_pos(g), ENEMY_HEXA);
+    for (int i = 0; i < WAVES[row].penta; i++)  spawn_enemy(g, safe_spawn_pos(g), ENEMY_PENTA);
+    for (int i = 0; i < WAVES[row].square; i++) spawn_enemy(g, safe_spawn_pos(g), ENEMY_SQUARE);
 }
 
 // Only the end of the split chain drops, so the reward sits on the hardest kill.

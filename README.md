@@ -99,6 +99,17 @@ it gives the life back; at three it pays 200 points instead. The colour follows
 the same rule, green or gold, so you always see what it will do before you
 commit to fetching it.
 
+## Wave composition
+
+`WAVES` near the top of `spawn_wave` holds one row per wave, and the last row
+repeats forever. The mix walks from four hexagons and nothing else to five
+pentagons and five squares, so the field turns from big and slow into small and
+fast while the total number of kills stays roughly level: harder, rather than
+more of the same. Nothing mutates along the way, so the enemies stay learnable.
+
+Triangles are never spawned directly. Red is something you make by taking the
+chain apart, which keeps the dance a choice.
+
 ## Grazing
 
 Flying close pays. Every 0.25s spent inside a band 26 px beyond the hulls pays
@@ -164,7 +175,7 @@ gives back plain lines.
   spawn point is clear, capped at 1.2s more so a busy middle cannot lock you
   out. While held up, a red hull pulses on the spawn point so the wait reads as
   the game holding rather than hanging.
-- Score per type, waves growing to 8 large enemies
+- Score per type, with wave composition hand-authored in a table
 
 Crashing into an enemy costs a life but leaves the enemy intact: no score, no
 split. Only bullets break things apart.
