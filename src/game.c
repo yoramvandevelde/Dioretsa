@@ -62,6 +62,11 @@ const EnemyType *enemy_type(EnemyTypeId id)
     return &ENEMY_TYPES[id];
 }
 
+static bool godMode = false;
+
+void game_set_god_mode(bool on) { godMode = on; }
+bool game_god_mode(void)        { return godMode; }
+
 static float frand(float lo, float hi)
 {
     return lo + (hi - lo) * (float)GetRandomValue(0, 10000) / 10000.0f;
@@ -441,7 +446,7 @@ void game_update(Game *g, const Input *in, float dt)
 
     // Ship against enemy. The enemy survives the crash: no score, no split.
     // Only the ship pays, otherwise dying would reward you with points.
-    if (s->base.alive && s->invuln <= 0.0f) {
+    if (!godMode && s->base.alive && s->invuln <= 0.0f) {
         for (int i = 0; i < MAX_ENEMIES; i++) {
             Enemy *e = &g->enemies[i];
             if (!e->base.alive) continue;
@@ -673,6 +678,12 @@ static void draw_hud(const Game *g)
 
     const char *wave = TextFormat("WAVE %i", g->wave);
     DrawText(wave, WORLD_W / 2 - MeasureText(wave, 20) / 2, 22, 20, GRAY);
+
+    // God mode takes the place of the lives, since there is nothing to count.
+    if (godMode) {
+        DrawText("GOD", WORLD_W - 20 - MeasureText("GOD", 28), 18, 28, RED);
+        return;
+    }
 
     for (int i = 0; i < g->lives; i++) {
         Vector2 p = { (float)(WORLD_W - 34 - i * 30), 34.0f };

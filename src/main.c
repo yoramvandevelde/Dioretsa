@@ -2,6 +2,8 @@
 #include "game.h"
 #include "fx.h"
 
+#include <string.h>
+
 #define FIXED_DT (1.0f / 60.0f)
 
 static Input read_input(void)
@@ -13,8 +15,12 @@ static Input read_input(void)
     return in;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--godmode") == 0) game_set_god_mode(true);
+    }
+
     InitWindow(WORLD_W, WORLD_H, "astroid v0.2");
     SetTargetFPS(60);
     fx_load_title_font();

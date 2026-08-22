@@ -11,6 +11,12 @@ cmake --build build
 ./build/astroid
 ```
 
+Pass `--godmode` to stop dying, for testing later waves without grinding through
+the early ones. The lives in the corner read GOD while it is on. Only the dying
+is skipped: grazing, the shield and the score all behave as they normally would,
+though with lives permanently full a pickup always pays points instead of
+handing one back.
+
 ## Controls
 
 | Key               | Action        |

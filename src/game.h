@@ -107,6 +107,11 @@ typedef struct {
 
 const EnemyType *enemy_type(EnemyTypeId id);
 
+// Debug switch for testing later waves without grinding through the early ones.
+// It lives outside Game on purpose, so restarting with R keeps it on.
+void game_set_god_mode(bool on);
+bool game_god_mode(void);
+
 void game_init(Game *g);
 void game_update(Game *g, const Input *in, float dt);   // fixed timestep
 void game_draw(const Game *g);
