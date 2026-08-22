@@ -5,17 +5,25 @@ Asteroids clone in C using [raylib](https://www.raylib.com/).
 ## Build
 
 ```sh
-brew install raylib cmake          # if raylib is missing, CMake fetches it itself
-cmake -B build
-cmake --build build
-./build/astroid
+brew install raylib cmake just
+just            # lists every recipe
+just run        # build and play
 ```
 
-Pass `--godmode` to stop dying, for testing later waves without grinding through
-the early ones. The lives in the corner read GOD while it is on. Only the dying
-is skipped: grazing, the shield and the score all behave as they normally would,
-though with lives permanently full a pickup always pays points instead of
-handing one back.
+`just build` links against the raylib brew installed, which takes seconds and is
+what you want while working. `just bundle-mac` does the opposite: it compiles
+raylib from source, links it statically, builds for both architectures, and
+lays out `dist/astroid-macos` with the executable and its assets, plus a zip of
+it. That runs on a Mac that has never seen Homebrew, Intel included.
+
+There is one assets directory, the one in the repository. Nothing is copied into
+a build directory, because copies mean several files with the same name and only
+one of them counting. The bundle copies from `git ls-files`, so scratch files
+sitting in `assets/` never travel with a release.
+
+At startup the executable tries, in order: `assets/` in the working directory,
+`assets/` beside itself, one level up, and inside a macOS bundle. Nothing is
+linked or baked in; whichever exists first wins.
 
 ## Controls
 

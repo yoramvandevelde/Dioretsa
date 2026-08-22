@@ -28,7 +28,7 @@
 #define REV_WET         0.09f
 #define REV_RAMP        0.4f    // wet units per second when toggled
 
-#define MUSIC_FILE      "SOUND/leberch-space-440026.mp3"
+#define MUSIC_FILE      "SOUND/rubyzephyr-dark-cinematic-ambient-tension-v2-461304.mp3"
 #define MUSIC_VOLUME    0.35f   // measured: puts it around -24 dB, under everything
 #define MUSIC_RAMP      0.5f    // volume units per second, so two seconds either way
 
