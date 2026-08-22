@@ -11,7 +11,16 @@
 #define ENGINE_DOWN     4.0f    // slower on release, so it winds down
 #define ENGINE_PITCH_LO 0.92f   // standing still
 #define ENGINE_PITCH_HI 1.12f   // flat out
+#define ENGINE_PAN      0.30f   // narrower than the one-shots, see the header
+#define ENGINE_SEAM_LOW 0.70f   // how far it ducks while crossing an edge (1 = not at all)
 
+#define MUSIC_FILE      "SOUND/leberch-space-440026.mp3"
+#define MUSIC_VOLUME    0.35f   // measured: puts it around -24 dB, under everything
+#define MUSIC_RAMP      0.5f    // volume units per second, so two seconds either way
+
+// The volume column corrects for how loud each file was recorded, not for how
+// loud it should feel. Measured levels differ by more than 20 dB, so values
+// above 1.0 are gain, not a mistake; each one still has peak headroom.
 static const struct {
     const char *file;
     float       volume;
@@ -25,8 +34,9 @@ static const struct {
     [SND_PICKUP_1UP]  = { "SOUND/PICKUP_1UP.wav",  1.0f },
     [SND_PICKUP_COIN] = { "SOUND/PICKUP_COIN.wav", 0.9f },
     [SND_SHOT]        = { "SOUND/SHOT.wav",        0.55f },
-    [SND_GRAZE]       = { "SOUND/GRAZE.wav",       0.4f },
+    [SND_GRAZE]       = { "SOUND/GRAZE.wav",       1.6f },   // file sits 18 dB low
     [SND_GAMEOVER]    = { "SOUND/GAMEOVER.wav",    1.0f },
+    [SND_WAVE]        = { "SOUND/WAVE.wav",        1.7f },
 };
 
 static Music engine;
@@ -34,6 +44,13 @@ static bool  engineLoaded  = false;
 static float engineLevel   = 0.0f;      // where the ramp is now
 static float engineTarget  = 0.0f;      // where it is heading
 static float engineSpeed   = 0.0f;
+static float enginePan     = 0.0f;
+static float engineSeam    = 1.0f;
+
+static Music track;
+static bool  trackLoaded  = false;
+static float trackLevel   = 0.0f;
+static float trackTarget  = 1.0f;
 
 static Sound voices[SND_COUNT][VOICES];
 static int   next[SND_COUNT];
@@ -72,12 +89,38 @@ void audio_init(void)
     SetMusicVolume(engine, 0.0f);
     PlayMusicStream(engine);
     engineLoaded = true;
+
+    const char *musicPath = asset_path(MUSIC_FILE);
+    if (!musicPath) {
+        TraceLog(LOG_WARNING, "music missing: %s", MUSIC_FILE);
+        return;
+    }
+
+    track = LoadMusicStream(musicPath);
+    if (track.frameCount == 0) return;
+
+    track.looping = true;
+    SetMusicVolume(track, 0.0f);        // faded in by audio_update
+    PlayMusicStream(track);
+    trackLoaded = true;
 }
 
-void audio_set_engine(bool thrusting, float speed)
+void audio_set_music(bool on)
 {
-    engineTarget = thrusting ? 1.0f : 0.0f;
-    engineSpeed  = (speed < 0.0f) ? 0.0f : (speed > 1.0f) ? 1.0f : speed;
+    trackTarget = on ? 1.0f : 0.0f;
+}
+
+bool audio_music_on(void)
+{
+    return trackTarget > 0.5f;
+}
+
+void audio_set_engine(EngineState st)
+{
+    engineTarget = st.thrusting ? 1.0f : 0.0f;
+    engineSpeed  = (st.speed < 0.0f) ? 0.0f : (st.speed > 1.0f) ? 1.0f : st.speed;
+    enginePan    = (st.pan < -1.0f) ? -1.0f : (st.pan > 1.0f) ? 1.0f : st.pan;
+    engineSeam   = (st.seam < 0.0f) ? 0.0f : (st.seam > 1.0f) ? 1.0f : st.seam;
 }
 
 float audio_engine_level(void)
@@ -85,29 +128,48 @@ float audio_engine_level(void)
     return engineLevel;
 }
 
+static float ramp_towards(float level, float target, float rate, float dt)
+{
+    float step = rate * dt;
+    if (level < target) {
+        level += step;
+        if (level > target) level = target;
+    } else {
+        level -= step;
+        if (level < target) level = target;
+    }
+    return level;
+}
+
 void audio_update(float dt)
 {
+    if (trackLoaded) {
+        UpdateMusicStream(track);
+        trackLevel = ramp_towards(trackLevel, trackTarget, MUSIC_RAMP, dt);
+        SetMusicVolume(track, trackLevel * MUSIC_VOLUME);
+    }
+
     if (!engineLoaded) return;
 
     UpdateMusicStream(engine);
 
     float rate = (engineTarget > engineLevel) ? ENGINE_UP : ENGINE_DOWN;
-    float step = rate * dt;
+    engineLevel = ramp_towards(engineLevel, engineTarget, rate, dt);
 
-    if (engineLevel < engineTarget) {
-        engineLevel += step;
-        if (engineLevel > engineTarget) engineLevel = engineTarget;
-    } else {
-        engineLevel -= step;
-        if (engineLevel < engineTarget) engineLevel = engineTarget;
-    }
-
-    SetMusicVolume(engine, engineLevel * ENGINE_VOLUME);
+    float seam = ENGINE_SEAM_LOW + (1.0f - ENGINE_SEAM_LOW) * engineSeam;
+    SetMusicVolume(engine, engineLevel * ENGINE_VOLUME * seam);
     SetMusicPitch(engine, ENGINE_PITCH_LO + (ENGINE_PITCH_HI - ENGINE_PITCH_LO) * engineSpeed);
+    SetMusicPan(engine, enginePan * ENGINE_PAN);
 }
 
 void audio_shutdown(void)
 {
+    if (trackLoaded) {
+        StopMusicStream(track);
+        UnloadMusicStream(track);
+        trackLoaded = false;
+    }
+
     if (engineLoaded) {
         StopMusicStream(engine);
         UnloadMusicStream(engine);
@@ -122,26 +184,43 @@ void audio_shutdown(void)
     }
 }
 
-static void play_at(SoundId id, float pitch)
+static void play_ex(SoundId id, float pitch, float pan)
 {
     if (id < 0 || id >= SND_COUNT || !loaded[id]) return;
 
     Sound s = voices[id][next[id]];
     next[id] = (next[id] + 1) % VOICES;
 
+    if (pan < -1.0f) pan = -1.0f;
+    if (pan >  1.0f) pan =  1.0f;
+
     SetSoundPitch(s, pitch);
+    SetSoundPan(s, pan);
     PlaySound(s);
 }
 
-void audio_play_varied(SoundId id, float pitchJitter)
+// Its own xorshift, for the same reason fx has one: sound must not move the
+// dice the gameplay rolls.
+static unsigned int rng = 88675123u;
+
+float audio_pitch_jitter(float amount)
 {
-    float j = pitchJitter * (float)GetRandomValue(-1000, 1000) / 1000.0f;
-    play_at(id, 1.0f + j);
+    rng ^= rng << 13;
+    rng ^= rng >> 17;
+    rng ^= rng << 5;
+
+    float unit = (float)(rng >> 8) / (float)(1u << 24) * 2.0f - 1.0f;   // -1 to 1
+    return 1.0f + amount * unit;
 }
 
 void audio_play_pitched(SoundId id, float pitch)
 {
-    play_at(id, pitch);
+    play_ex(id, pitch, 0.0f);
+}
+
+void audio_play_at(SoundId id, float pan, float pitch)
+{
+    play_ex(id, pitch, pan);
 }
 
 void audio_stop(SoundId id)
@@ -152,5 +231,5 @@ void audio_stop(SoundId id)
 
 void audio_play(SoundId id)
 {
-    play_at(id, 1.0f);
+    play_ex(id, 1.0f, 0.0f);
 }

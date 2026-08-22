@@ -149,6 +149,21 @@ looking. Shots vary by 6% at random, because a fixed sample five times a second
 turns into a machine gun. The graze tick pitches up with the multiplier, so
 threading four reds sounds different from brushing one grey.
 
+Sounds are panned to where they happen, at 0.75 of the field rather than hard
+left and right: an explosion still in view should not sound like it left the
+screen. The engine pans too, but narrower and with a dip as it crosses a
+wrapping edge, because its pan flips sides there and a flip you can hear is a
+flip that sounds broken.
+
+The volume column corrects for how loud each file was recorded, not for how
+loud it should feel. The measured levels of the samples differ by more than
+20 dB, so values above 1.0 are gain rather than a mistake, and each still has
+peak headroom.
+
+A soundscape runs from launch to exit, straight through pause and game over: it
+is the room you are in, not a reaction to anything. M fades it in and out, so
+comparing it against silence is not itself an event.
+
 The engine is a music stream that never stops. Thrust moves a target and
 `audio_update` ramps the volume towards it, up in 0.1s and down in 0.25s;
 starting and stopping a sound on every tap clicks and rattles, a ramp does not.
@@ -217,3 +232,5 @@ Not done yet: sound, screen shake and a high score.
 
 `assets/ArchivoBlack-Regular.ttf` is Archivo Black by Omnibus-Type, under the
 SIL Open Font License 1.1. The licence text sits next to it in `assets/OFL.txt`.
+
+The music track is royalty free. Its credit line still needs filling in here.

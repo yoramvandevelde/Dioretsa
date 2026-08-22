@@ -23,6 +23,9 @@
 #define PICKUP_RADIUS     13.0f
 #define PICKUP_BONUS      200       // points when your lives are already full
 
+#define PAN_WIDTH         0.75f     // never hard left or right, the field is one screen
+#define SEAM_FADE         45.0f     // pixels either side of an edge the engine ducks over
+
 #define GRAZE_BAND        26.0f     // how far past the hulls still counts
 #define GRAZE_TICK        0.25f     // pays out per quarter second of grazing
 #define GRAZE_MULT_CAP    4         // a crowd is not the same as a stunt
@@ -103,6 +106,21 @@ static void entity_integrate(Entity *e, float dt)
 // edge and coming back in on the other is often the short way round. Signed, so
 // it also serves as a direction. wrap() keeps positions inside [0, span), which
 // makes this exact rather than approximate.
+// Where a thing happens on screen is where it should sound.
+static float pan_of(float x)
+{
+    return ((x / (float)WORLD_W) * 2.0f - 1.0f) * PAN_WIDTH;
+}
+
+// 1 in open space, sliding to 0 at a left or right edge. The engine fades out
+// on the way over and back in on the other side, so its pan flip is inaudible.
+static float seam_fade(float x)
+{
+    float d = (x < WORLD_W - x) ? x : WORLD_W - x;
+    float k = d / SEAM_FADE;
+    return (k > 1.0f) ? 1.0f : (k < 0.0f) ? 0.0f : k;
+}
+
 static float torus_offset(float from, float to, float span)
 {
     float d = to - from;
@@ -256,8 +274,10 @@ static void reset_ship(Ship *s)
 
 void game_init(Game *g)
 {
-    // Three seconds of game over should not bleed into the next attempt.
+    // Three seconds of game over should not bleed into the next attempt, and
+    // neither should a wave title still ringing from the last one.
     audio_stop(SND_GAMEOVER);
+    audio_stop(SND_WAVE);
 
     *g = (Game){ 0 };
 
@@ -267,6 +287,7 @@ void game_init(Game *g)
     g->wave   = 1;
     g->banner    = BANNER_TIME;
     g->waveDelay = BANNER_HOLD;     // the opening wave arrives with the zoom too
+    audio_play(SND_WAVE);
 }
 
 static void fire_bullet(Game *g)
@@ -293,14 +314,14 @@ static void fire_bullet(Game *g)
     g->ship.base.vel.y -= dir.y * FIRE_RECOIL;
     fx_emit_muzzle(&g->fx, b->base.pos, dir, s->base.vel);
 
-    audio_play_varied(SND_SHOT, 0.06f);
+    audio_play_at(SND_SHOT, pan_of(s->base.pos.x), audio_pitch_jitter(0.06f));
 
     g->ship.fireCooldown = FIRE_COOLDOWN;
 }
 
 static void kill_ship(Game *g)
 {
-    audio_play(SND_CRASH);
+    audio_play_at(SND_CRASH, pan_of(g->ship.base.pos.x), 1.0f);
     fx_emit_burst(&g->fx, g->ship.base.pos, g->ship.base.vel, RAYWHITE, 28, 200.0f);
 
     g->lives--;
@@ -373,7 +394,7 @@ static void enemy_behave(Enemy *e, const Game *g, float dt)
 void game_update(Game *g, const Input *in, float dt)
 {
     if (g->paused || g->gameOver) {
-        audio_set_engine(false, 0.0f);
+        audio_set_engine((EngineState){ .seam = 1.0f });
         return;
     }
 
@@ -391,7 +412,12 @@ void game_update(Game *g, const Input *in, float dt)
 
         // Terminal velocity is thrust over drag; the engine note follows it.
         float speed = sqrtf(s->base.vel.x * s->base.vel.x + s->base.vel.y * s->base.vel.y);
-        audio_set_engine(in->thrust, speed / (SHIP_THRUST / SHIP_DRAG));
+        audio_set_engine((EngineState){
+            .thrusting = in->thrust,
+            .speed     = speed / (SHIP_THRUST / SHIP_DRAG),
+            .pan       = pan_of(s->base.pos.x),
+            .seam      = seam_fade(s->base.pos.x),
+        });
 
         float damp = 1.0f - SHIP_DRAG * dt;
         s->base.vel.x *= damp;
@@ -418,7 +444,7 @@ void game_update(Game *g, const Input *in, float dt)
         // is clear. The hard cap keeps a crowded middle from locking you out.
         s->respawnIn -= dt;
         s->thrusting  = false;
-        audio_set_engine(false, 0.0f);
+        audio_set_engine((EngineState){ .seam = 1.0f });
 
         if (s->respawnIn <= 0.0f &&
             (centre_is_clear(g) || s->respawnIn <= -RESPAWN_MAX_WAIT)) {
@@ -469,7 +495,7 @@ void game_update(Game *g, const Input *in, float dt)
 
             // A touch of pitch so a chain reaction does not sound like one
             // sample played five times.
-            audio_play_varied(t->sound, 0.05f);
+            audio_play_at(t->sound, pan_of(e->base.pos.x), audio_pitch_jitter(0.05f));
 
             if (t->splitInto < 0 && GetRandomValue(1, 100) <= PICKUP_CHANCE) {
                 drop_pickup(g, e->base.pos, e->base.vel);
@@ -512,12 +538,12 @@ void game_update(Game *g, const Input *in, float dt)
         if (g->lives < START_LIVES) {
             g->lives++;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, LIME, 26, 150.0f);
-            audio_play(SND_PICKUP_1UP);
+            audio_play_at(SND_PICKUP_1UP, pan_of(p->base.pos.x), 1.0f);
         } else {
             g->score += PICKUP_BONUS;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, GOLD, 26, 150.0f);
             fx_emit_score(&g->fx, p->base.pos, PICKUP_BONUS);
-            audio_play(SND_PICKUP_COIN);
+            audio_play_at(SND_PICKUP_COIN, pan_of(p->base.pos.x), 1.0f);
         }
     }
 
@@ -556,7 +582,8 @@ void game_update(Game *g, const Input *in, float dt)
 
                 // Pitch climbs with the crowd, so threading four reds sounds
                 // different from brushing one grey.
-                audio_play_pitched(SND_GRAZE, 1.0f + 0.12f * (float)(mult - 1));
+                audio_play_at(SND_GRAZE, pan_of(s->base.pos.x),
+                              1.0f + 0.12f * (float)(mult - 1));
             }
         } else {
             s->grazeTimer = 0.0f;   // no partial ticks banked between passes
@@ -575,6 +602,7 @@ void game_update(Game *g, const Input *in, float dt)
         g->wave++;
         g->banner    = BANNER_TIME;
         g->waveDelay = BANNER_HOLD;
+        audio_play(SND_WAVE);
 
         // Untouchable until the title clears, so nobody dies to a wave they
         // could not see coming.
