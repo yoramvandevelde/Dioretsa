@@ -47,6 +47,16 @@ void audio_set_engine(EngineState state);
 void audio_set_music(bool on);
 bool audio_music_on(void);
 
+// A hint of room around everything, on the final mix. raylib has no send bus,
+// so this is all or nothing: keep it subtle, or it flattens the difference
+// between near and far. Toggling ramps rather than switches.
+void audio_set_reverb(bool on);
+bool audio_reverb_on(void);
+
+// Runs the reverb over interleaved stereo floats. The audio thread calls this;
+// it is exposed so it can also be measured offline.
+void audio_reverb_process(float *samples, unsigned int frames);
+
 float audio_engine_level(void);     // 0 to 1, where the ramp currently sits
 
 // Plays one voice of the sound. Repeats overlap instead of cutting each other

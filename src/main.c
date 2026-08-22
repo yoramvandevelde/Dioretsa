@@ -37,6 +37,7 @@ int main(int argc, char **argv)
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_P)) game.paused = !game.paused;
         if (IsKeyPressed(KEY_M)) audio_set_music(!audio_music_on());
+        if (IsKeyPressed(KEY_V)) audio_set_reverb(!audio_reverb_on());
         if (IsKeyPressed(KEY_R)) game_init(&game);
         if (IsKeyPressed(KEY_SPACE)) pendingFire = true;
 

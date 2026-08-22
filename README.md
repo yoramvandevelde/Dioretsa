@@ -164,6 +164,12 @@ A soundscape runs from launch to exit, straight through pause and game over: it
 is the room you are in, not a reaction to anything. M fades it in and out, so
 comparing it against silence is not itself an event.
 
+A Schroeder reverb sits on the final mix, four combs into two allpasses, with V
+to toggle it. raylib has no send bus, so it is all or nothing: the delays are
+long, so it reads as space rather than a room, and the wet level is deliberately
+low. A loud one puts everything in the same room and flattens the difference
+between near and far.
+
 The engine is a music stream that never stops. Thrust moves a target and
 `audio_update` ramps the volume towards it, up in 0.1s and down in 0.25s;
 starting and stopping a sound on every tap clicks and rattles, a ramp does not.
