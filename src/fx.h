@@ -80,4 +80,8 @@ void fx_glow_dot(Vector2 pos, float radius, Color color);
 // A band of the given thickness centred on radius, halo included.
 void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color);
 
+// The same band, but only part of the way round, starting at the top. Reads as
+// a countdown when the sweep runs down to nothing.
+void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Color color);
+
 #endif // FX_H

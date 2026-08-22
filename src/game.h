@@ -12,6 +12,7 @@
 // triangles is 64 enemies, plus the extra squares later waves throw in.
 #define MAX_ENEMIES     128
 #define MAX_BULLETS     32
+#define MAX_PICKUPS     4
 #define START_LIVES     3
 
 // Everything drifting through the world shares this base. It sits first in
@@ -68,6 +69,14 @@ typedef struct {
     int         splitCount;
 } EnemyType;
 
+// Dropped by a dying triangle. What it hands over is decided when you touch
+// it, not when it falls: a life if you are down one, points if you are not.
+typedef struct {
+    Entity  base;
+    Vector2 drift;          // speed it was dropped with, bled off over its life
+    float   life;           // seconds before it fades away
+} Pickup;
+
 typedef struct {
     Entity      base;
     EnemyTypeId type;
@@ -78,6 +87,7 @@ typedef struct {
     Ship     ship;
     Enemy    enemies[MAX_ENEMIES];  // slots: use base.alive, not a count
     Bullet   bullets[MAX_BULLETS];
+    Pickup   pickups[MAX_PICKUPS];
     int      score;
     int      lives;
     int      wave;

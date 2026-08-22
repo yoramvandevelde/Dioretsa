@@ -17,6 +17,11 @@
 #define BANNER_FROM       0.85f     // held width, as a share of the screen
 #define BANNER_TO         2.60f     // final width, well past the edges
 
+#define PICKUP_CHANCE     10        // percent, on destroying a triangle
+#define PICKUP_LIFE       5.0f      // seconds before it fades away
+#define PICKUP_RADIUS     13.0f
+#define PICKUP_BONUS      200       // points when your lives are already full
+
 #define GRAZE_BAND        26.0f     // how far past the hulls still counts
 #define GRAZE_TICK        0.25f     // pays out per quarter second of grazing
 #define GRAZE_MULT_CAP    4         // a crowd is not the same as a stunt
@@ -193,6 +198,23 @@ static void spawn_wave(Game *g)
     int extra = g->wave - 2;
     if (extra > 3) extra = 3;
     for (int i = 0; i < extra; i++) spawn_enemy(g, safe_spawn_pos(g), ENEMY_SQUARE);
+}
+
+// Only the end of the split chain drops, so the reward sits on the hardest kill.
+static void drop_pickup(Game *g, Vector2 pos, Vector2 vel)
+{
+    int slot = find_free_slot(&g->pickups[0].base, MAX_PICKUPS, sizeof(Pickup));
+    if (slot < 0) return;
+
+    Pickup *p = &g->pickups[slot];
+    p->drift       = vel;
+    p->base.pos    = pos;
+    p->base.vel    = vel;               // drifts on with whatever dropped it
+    p->base.rot    = 0.0f;
+    p->base.rotVel = 1.1f;
+    p->base.radius = PICKUP_RADIUS;
+    p->base.alive  = true;
+    p->life        = PICKUP_LIFE;
 }
 
 static void reset_ship(Ship *s)
@@ -408,6 +430,10 @@ void game_update(Game *g, const Input *in, float dt)
             fx_emit_burst(&g->fx, e->base.pos, e->base.vel, t->color,
                           6 + t->sides * 3, 40.0f + e->base.radius * 2.2f);
 
+            if (t->splitInto < 0 && GetRandomValue(1, 100) <= PICKUP_CHANCE) {
+                drop_pickup(g, e->base.pos, e->base.vel);
+            }
+
             split_enemy(g, e);
             break;
         }
@@ -423,6 +449,32 @@ void game_update(Game *g, const Input *in, float dt)
 
             kill_ship(g);
             break;
+        }
+    }
+
+    for (int i = 0; i < MAX_PICKUPS; i++) {
+        Pickup *p = &g->pickups[i];
+        if (!p->base.alive) continue;
+
+        p->life -= dt;
+        if (p->life <= 0.0f) { p->base.alive = false; continue; }
+
+        // Coast to a halt over its lifetime. A triangle can be doing 225 px/s
+        // when it dies, and a pickup carrying that speed is not catchable.
+        float k = p->life / PICKUP_LIFE;
+        p->base.vel = (Vector2){ p->drift.x * k, p->drift.y * k };
+        entity_integrate(&p->base, dt);
+
+        if (!s->base.alive || !entity_hit(&s->base, &p->base)) continue;
+
+        p->base.alive = false;
+        if (g->lives < START_LIVES) {
+            g->lives++;
+            fx_emit_burst(&g->fx, p->base.pos, p->base.vel, LIME, 26, 150.0f);
+        } else {
+            g->score += PICKUP_BONUS;
+            fx_emit_burst(&g->fx, p->base.pos, p->base.vel, GOLD, 26, 150.0f);
+            fx_emit_score(&g->fx, p->base.pos, PICKUP_BONUS);
         }
     }
 
@@ -590,6 +642,31 @@ static void draw_enemy(const Enemy *e)
     }
 }
 
+static void draw_pickup(const Pickup *p, bool givesLife)
+{
+    Color color = givesLife ? LIME : GOLD;
+    float t     = p->life / PICKUP_LIFE;
+
+    Vector2 at[4];
+    int n = ghost_positions(p->base.pos, PICKUP_RADIUS, at);
+    for (int i = 0; i < n; i++) {
+        // The arc drains as the time does, so the deadline is readable.
+        fx_glow_arc(at[i], PICKUP_RADIUS + 5.0f, 3.0f, 360.0f * t, color);
+
+        // A cross, spun slowly so it reads as a pickup rather than an enemy.
+        float arm = PICKUP_RADIUS * 0.55f;
+        for (int k = 0; k < 2; k++) {
+            Vector2 dir = rotate((Vector2){ (k == 0) ? arm : 0.0f, (k == 0) ? 0.0f : arm },
+                                 p->base.rot);
+            Vector2 line[2] = {
+                { at[i].x - dir.x, at[i].y - dir.y },
+                { at[i].x + dir.x, at[i].y + dir.y },
+            };
+            fx_glow_strip(line, 2, color);
+        }
+    }
+}
+
 static void draw_hud(const Game *g)
 {
     DrawText(TextFormat("%06i", g->score), 20, 18, 28, RAYWHITE);
@@ -648,6 +725,10 @@ void game_draw(const Game *g)
         int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
         for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
     }
+    for (int i = 0; i < MAX_PICKUPS; i++) {
+        if (g->pickups[i].base.alive) draw_pickup(&g->pickups[i], g->lives < START_LIVES);
+    }
+
     if (g->ship.base.alive)   draw_ship(&g->ship);
     // Only once the pause is over and something is actually in the way.
     else if (!g->gameOver && g->ship.respawnIn <= 0.0f) draw_ship_pending(&g->ship);

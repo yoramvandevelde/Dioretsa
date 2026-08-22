@@ -344,16 +344,25 @@ void fx_glow_dot(Vector2 pos, float radius, Color color)
     DrawCircleV(pos, radius, color);
 }
 
-void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)
+void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Color color)
 {
     float a    = color.a / 255.0f;
     float half = thickness * 0.5f;
     if (half < 0.4f) half = 0.4f;
 
+    // Start at the top and sweep clockwise, the way a clock empties.
+    float from = -90.0f;
+    float to   = from + sweepDeg;
+
     BeginBlendMode(BLEND_ADDITIVE);
-        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, 0.0f, 360.0f, 64,
+        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, 64,
                  Fade(color, GLOW_WIDE_ALPHA * a));
     EndBlendMode();
 
-    DrawRing(pos, radius - half, radius + half, 0.0f, 360.0f, 64, color);
+    DrawRing(pos, radius - half, radius + half, from, to, 64, color);
+}
+
+void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)
+{
+    fx_glow_arc(pos, radius, thickness, 360.0f, color);
 }

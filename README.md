@@ -76,6 +76,23 @@ until the letters clear. Nobody dies to an enemy that came out from behind a
 letter, and grazing is dead in that window because it already keys off the
 shield.
 
+## Pickups
+
+A destroyed triangle drops one about one time in ten. Nothing else drops: the
+reward sits on the hardest kill in the game, which is also the one you took a
+risk for. It leaves with the velocity of whatever dropped it and bleeds that off over its
+lifetime, coasting to a halt: a hunting triangle can be doing 225 px/s when it
+dies, and a pickup carrying that speed is gone before you can turn around. As it
+stands it covers about 560 px, well under half the world, so it stays reachable
+while still pulling you back into the fight you just came out of. A draining arc
+shows the five seconds you have to decide.
+
+What it hands over is decided when you touch it, not when it falls, so losing a
+life while it floats cannot leave you holding the wrong prize. Below three lives
+it gives the life back; at three it pays 200 points instead. The colour follows
+the same rule, green or gold, so you always see what it will do before you
+commit to fetching it.
+
 ## Grazing
 
 Flying close pays. Every 0.25s spent inside a band 26 px beyond the hulls pays
