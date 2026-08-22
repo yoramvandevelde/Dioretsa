@@ -1,6 +1,6 @@
 # Dioretsa
 
-An asteroids game about flying badly. Are _those_ following me?
+An asteroids game about flying badly. Wait... are _those_ following me?
 
 ![Dioretsa](docs/screenshot.png)
 
