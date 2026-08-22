@@ -50,14 +50,18 @@
 
 // All enemy balancing lives here. The split chain runs large to small:
 // hexagon -> pentagon -> square -> triangle -> gone.
+//
+// The colours are written out rather than using raylib's LIGHTGRAY and friends:
+// those are compound literals, which MSVC does not accept as constants in a
+// static initialiser even though clang and gcc do.
 static const EnemyType ENEMY_TYPES[ENEMY_TYPE_COUNT] = {
-    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, LIGHTGRAY,  20, 1, SND_EXPLOSION_4,
+    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, { 200, 200, 200, 255 },  20, 1, SND_EXPLOSION_4,
                          BEHAVIOR_DRIFT,   ENEMY_PENTA,    2 },
-    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, SKYBLUE,    50, 4, SND_EXPLOSION_3,
+    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, { 102, 191, 255, 255 },  50, 4, SND_EXPLOSION_3,
                          BEHAVIOR_DRIFT,   ENEMY_SQUARE,   2 },
-    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, GOLD,      100, 12, SND_EXPLOSION_2,
+    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, { 255, 203,   0, 255 }, 100, 12, SND_EXPLOSION_2,
                          BEHAVIOR_SPINNER, ENEMY_TRIANGLE, 2 },
-    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, RED,       200, 40, SND_EXPLOSION_1,
+    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, { 230,  41,  55, 255 }, 200, 40, SND_EXPLOSION_1,
                          BEHAVIOR_SEEK,   -1,             0 },
 };
 
