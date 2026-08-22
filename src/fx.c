@@ -1,4 +1,5 @@
 #include "fx.h"
+#include "assets.h"
 #include "game.h"
 
 #include <math.h>
@@ -44,23 +45,17 @@ static bool  titleLoaded   = false;
 
 void fx_load_title_font(void)
 {
-    // Run from the repo root or from the build directory, either is fine.
-    const char *candidates[] = {
-        "assets/ArchivoBlack-Regular.ttf",
-        TextFormat("%s../assets/ArchivoBlack-Regular.ttf", GetApplicationDirectory()),
-    };
-
-    for (int i = 0; i < 2; i++) {
-        if (!FileExists(candidates[i])) continue;
-
-        titleFont = LoadFontEx(candidates[i], TITLE_FONT_SIZE, NULL, 0);
-        if (titleFont.texture.id == 0) continue;
-
-        SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
-        titleLoaded = true;
+    const char *path = asset_path("ArchivoBlack-Regular.ttf");
+    if (!path) {
+        TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
         return;
     }
-    TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
+
+    titleFont = LoadFontEx(path, TITLE_FONT_SIZE, NULL, 0);
+    if (titleFont.texture.id == 0) return;
+
+    SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
+    titleLoaded = true;
 }
 
 void fx_unload_title_font(void)

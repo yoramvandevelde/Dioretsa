@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "game.h"
 #include "fx.h"
+#include "audio.h"
 
 #include <string.h>
 
@@ -23,7 +24,9 @@ int main(int argc, char **argv)
 
     InitWindow(WORLD_W, WORLD_H, "astroid v0.2");
     SetTargetFPS(60);
+    InitAudioDevice();
     fx_load_title_font();
+    audio_init();
 
     Game game;
     game_init(&game);
@@ -51,6 +54,8 @@ int main(int argc, char **argv)
             accumulator -= FIXED_DT;
         }
 
+        audio_update(GetFrameTime());
+
         BeginDrawing();
             ClearBackground(BLACK);
             game_draw(&game);
@@ -58,7 +63,9 @@ int main(int argc, char **argv)
         EndDrawing();
     }
 
+    audio_shutdown();
     fx_unload_title_font();
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }

@@ -22,6 +22,8 @@ add_executable(astroid
     src/main.c
     src/game.c
     src/fx.c
+    src/audio.c
+    src/assets.c
 )
 
 target_include_directories(astroid PRIVATE src)

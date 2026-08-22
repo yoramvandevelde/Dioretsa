@@ -135,6 +135,26 @@ moment you turned to follow. The real cost of chasing is attention, not the
 rule. You are steering at one object while the rest of the field keeps moving,
 and a triangle accelerates into you the moment you try.
 
+## Sound
+
+`src/audio.c` holds an enum and a table, the same shape as the enemy table: a
+new sound is one line in `SoundId` and one row naming the file and its volume.
+Every sound gets four voices through `LoadSoundAlias`, which share the sample
+data, so a chain reaction overlaps instead of cutting itself off. A missing file
+logs a warning and stays silent; it is never fatal.
+
+Enemies carry their own note in `ENEMY_TYPES`, pitched by size: a triangle pops
+at 512 Hz and a hexagon thuds at 191 Hz, so you can hear what you hit without
+looking. Shots vary by 6% at random, because a fixed sample five times a second
+turns into a machine gun. The graze tick pitches up with the multiplier, so
+threading four reds sounds different from brushing one grey.
+
+The engine is a music stream that never stops. Thrust moves a target and
+`audio_update` ramps the volume towards it, up in 0.1s and down in 0.25s;
+starting and stopping a sound on every tap clicks and rattles, a ramp does not.
+Its pitch follows your speed against terminal velocity, and it sits well under
+everything else because it plays constantly.
+
 ## Effects
 
 `Fx` is cosmetic state, held inside `Game` so it freezes on pause and resets on

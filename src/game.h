@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 
+#include "audio.h"
 #include "fx.h"
 
 #define WORLD_W 1280
@@ -64,6 +65,7 @@ typedef struct {
     Color       color;
     int         score;
     int         graze;              // payout per graze tick, steeply per type
+    SoundId     sound;              // its own note: small is bright, big is deep
     Behavior    behavior;
     int         splitInto;          // EnemyTypeId, or -1 for no remains
     int         splitCount;

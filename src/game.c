@@ -1,4 +1,5 @@
 #include "game.h"
+#include "audio.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -47,13 +48,13 @@
 // All enemy balancing lives here. The split chain runs large to small:
 // hexagon -> pentagon -> square -> triangle -> gone.
 static const EnemyType ENEMY_TYPES[ENEMY_TYPE_COUNT] = {
-    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, LIGHTGRAY,  20, 1,
+    [ENEMY_HEXA]     = { "hexagon",  6, 60.0f, 40.0f,  70.0f, 0.5f, LIGHTGRAY,  20, 1, SND_EXPLOSION_4,
                          BEHAVIOR_DRIFT,   ENEMY_PENTA,    2 },
-    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, SKYBLUE,    50, 4,
+    [ENEMY_PENTA]    = { "pentagon", 5, 44.0f, 55.0f,  90.0f, 0.7f, SKYBLUE,    50, 4, SND_EXPLOSION_3,
                          BEHAVIOR_DRIFT,   ENEMY_SQUARE,   2 },
-    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, GOLD,      100, 12,
+    [ENEMY_SQUARE]   = { "square",   4, 32.0f, 75.0f, 115.0f, 1.0f, GOLD,      100, 12, SND_EXPLOSION_2,
                          BEHAVIOR_SPINNER, ENEMY_TRIANGLE, 2 },
-    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, RED,       200, 40,
+    [ENEMY_TRIANGLE] = { "triangle", 3, 20.0f, 95.0f, 150.0f, 1.4f, RED,       200, 40, SND_EXPLOSION_1,
                          BEHAVIOR_SEEK,   -1,             0 },
 };
 
@@ -255,6 +256,9 @@ static void reset_ship(Ship *s)
 
 void game_init(Game *g)
 {
+    // Three seconds of game over should not bleed into the next attempt.
+    audio_stop(SND_GAMEOVER);
+
     *g = (Game){ 0 };
 
     reset_ship(&g->ship);
@@ -289,11 +293,14 @@ static void fire_bullet(Game *g)
     g->ship.base.vel.y -= dir.y * FIRE_RECOIL;
     fx_emit_muzzle(&g->fx, b->base.pos, dir, s->base.vel);
 
+    audio_play_varied(SND_SHOT, 0.06f);
+
     g->ship.fireCooldown = FIRE_COOLDOWN;
 }
 
 static void kill_ship(Game *g)
 {
+    audio_play(SND_CRASH);
     fx_emit_burst(&g->fx, g->ship.base.pos, g->ship.base.vel, RAYWHITE, 28, 200.0f);
 
     g->lives--;
@@ -301,6 +308,7 @@ static void kill_ship(Game *g)
         g->lives           = 0;
         g->gameOver        = true;
         g->ship.base.alive = false;
+        audio_play(SND_GAMEOVER);
         return;
     }
 
@@ -364,7 +372,10 @@ static void enemy_behave(Enemy *e, const Game *g, float dt)
 
 void game_update(Game *g, const Input *in, float dt)
 {
-    if (g->paused || g->gameOver) return;
+    if (g->paused || g->gameOver) {
+        audio_set_engine(false, 0.0f);
+        return;
+    }
 
     Ship *s = &g->ship;
 
@@ -377,6 +388,10 @@ void game_update(Game *g, const Input *in, float dt)
             s->base.vel.x += dir.x * SHIP_THRUST * dt;
             s->base.vel.y += dir.y * SHIP_THRUST * dt;
         }
+
+        // Terminal velocity is thrust over drag; the engine note follows it.
+        float speed = sqrtf(s->base.vel.x * s->base.vel.x + s->base.vel.y * s->base.vel.y);
+        audio_set_engine(in->thrust, speed / (SHIP_THRUST / SHIP_DRAG));
 
         float damp = 1.0f - SHIP_DRAG * dt;
         s->base.vel.x *= damp;
@@ -403,6 +418,7 @@ void game_update(Game *g, const Input *in, float dt)
         // is clear. The hard cap keeps a crowded middle from locking you out.
         s->respawnIn -= dt;
         s->thrusting  = false;
+        audio_set_engine(false, 0.0f);
 
         if (s->respawnIn <= 0.0f &&
             (centre_is_clear(g) || s->respawnIn <= -RESPAWN_MAX_WAIT)) {
@@ -451,6 +467,10 @@ void game_update(Game *g, const Input *in, float dt)
             fx_emit_burst(&g->fx, e->base.pos, e->base.vel, t->color,
                           6 + t->sides * 3, 40.0f + e->base.radius * 2.2f);
 
+            // A touch of pitch so a chain reaction does not sound like one
+            // sample played five times.
+            audio_play_varied(t->sound, 0.05f);
+
             if (t->splitInto < 0 && GetRandomValue(1, 100) <= PICKUP_CHANCE) {
                 drop_pickup(g, e->base.pos, e->base.vel);
             }
@@ -492,10 +512,12 @@ void game_update(Game *g, const Input *in, float dt)
         if (g->lives < START_LIVES) {
             g->lives++;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, LIME, 26, 150.0f);
+            audio_play(SND_PICKUP_1UP);
         } else {
             g->score += PICKUP_BONUS;
             fx_emit_burst(&g->fx, p->base.pos, p->base.vel, GOLD, 26, 150.0f);
             fx_emit_score(&g->fx, p->base.pos, PICKUP_BONUS);
+            audio_play(SND_PICKUP_COIN);
         }
     }
 
@@ -531,6 +553,10 @@ void game_update(Game *g, const Input *in, float dt)
 
                 g->score += award;
                 fx_emit_score(&g->fx, s->base.pos, award);
+
+                // Pitch climbs with the crowd, so threading four reds sounds
+                // different from brushing one grey.
+                audio_play_pitched(SND_GRAZE, 1.0f + 0.12f * (float)(mult - 1));
             }
         } else {
             s->grazeTimer = 0.0f;   // no partial ticks banked between passes

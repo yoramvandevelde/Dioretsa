@@ -1,3 +1,6 @@
 build/
 compile_commands.json
 .DS_Store
+
+# rfxgen project files, the wavs are what the game needs
+*.rfx
