@@ -115,6 +115,7 @@ typedef struct {
     Stats    stats;
     bool     attract;               // title screen: the field drifts, nobody flies
     bool     paused;
+    bool     confirmQuit;           // holding still while the quit question is up
     bool     gameOver;
     Fx       fx;                    // cosmetic only, never read by the rules
 } Game;
