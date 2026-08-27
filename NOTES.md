@@ -148,6 +148,18 @@ and no HUD, with ANY KEY... breathing in the middle. Any key at all starts a run
 and nothing else is read that frame, or the key you pressed would also pause the
 game or mute the music on the way in. `--skip-menu` goes straight into wave 1.
 
+## Quitting
+
+Esc used to end the run on the spot, because raylib wires it to the exit key by
+default. `SetExitKey(KEY_NULL)` hands it back, and the game asks instead: the
+field holds where it is, dimmed, with QUIT? over it and Y or N as the answer.
+Holding is the same early return as a pause, so a run comes back untouched when
+the answer is no, and nothing else is read while the question is up: the key
+that answers it cannot also fire a shot or restart the game.
+
+The window close button still means what it says. Only Esc asks, because only
+Esc sits next to the keys you are already using and ends a run by accident.
+
 ## The report
 
 Dying opens a report rather than a dimmed field: four headline figures across

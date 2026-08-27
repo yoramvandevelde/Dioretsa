@@ -25,6 +25,7 @@ int main(int argc, char **argv)
     }
 
     InitWindow(WORLD_W, WORLD_H, "Dioretsa");
+    SetExitKey(KEY_NULL);       // Esc is ours: it asks rather than quits
     SetTargetFPS(60);
     InitAudioDevice();
     fx_load_title_font();
@@ -36,9 +37,19 @@ int main(int argc, char **argv)
 
     float accumulator = 0.0f;
     bool  pendingFire = false;      // held until an update step consumes it
+    bool  quit        = false;
 
-    while (!WindowShouldClose()) {
-        if (game.attract) {
+    // The close button still means what it says; only Esc, which is easy to
+    // hit by accident, is worth a question.
+    while (!quit && !WindowShouldClose()) {
+        if (game.confirmQuit) {
+            // Nothing else is read while the question is up, so answering it
+            // cannot also fire a shot or restart the run.
+            if (IsKeyPressed(KEY_Y) || IsKeyPressed(KEY_ENTER))  quit = true;
+            if (IsKeyPressed(KEY_N) || IsKeyPressed(KEY_ESCAPE)) game.confirmQuit = false;
+        } else if (IsKeyPressed(KEY_ESCAPE)) {
+            game.confirmQuit = true;
+        } else if (game.attract) {
             // Any key at all starts the run, and nothing else happens this
             // frame: handling the game keys as well would start it paused.
             if (GetKeyPressed() != 0) game_init(&game);

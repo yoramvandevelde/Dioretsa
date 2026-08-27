@@ -6,15 +6,15 @@ An asteroids game about flying badly. Are _those_ following me?
 
 ## Playing
 
-| Key               | Action        |
-| ----------------- | ------------- |
-| Left/Right, A/D   | turn          |
-| Up, W             | thrust        |
-| Space             | fire          |
-| P                 | pause         |
-| R                 | restart       |
-| M                 | music on/off  |
-| Esc               | quit          |
+| Key             | Action           |
+| --------------- | ---------------- |
+| Left/Right, A/D | turn             |
+| Up, W           | thrust           |
+| Space           | fire             |
+| P               | pause            |
+| R               | restart          |
+| M               | music on/off     |
+| Esc             | quit, asks first |
 
 
 ## Running it
