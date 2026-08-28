@@ -69,3 +69,6 @@ Built with [raylib](https://www.raylib.com/).
 
 Sound effects made with [rfxgen](https://raylibtech.itch.io/rfxgen).
 
+The code here is MIT; see `LICENSE`. What ships alongside it is not covered by
+that and keeps the licences named above.
+
