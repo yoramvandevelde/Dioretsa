@@ -102,6 +102,14 @@ typedef struct {
     float closest;                      // smallest gap survived, pixels
 } Stats;
 
+// The questions the game stops to ask. Both hold the run still while they are
+// up, and both are answered in the same place.
+typedef enum {
+    CONFIRM_NONE,
+    CONFIRM_QUIT,
+    CONFIRM_RESTART
+} Confirm;
+
 typedef struct {
     Ship     ship;
     Enemy    enemies[MAX_ENEMIES];  // slots: use base.alive, not a count
@@ -115,7 +123,7 @@ typedef struct {
     Stats    stats;
     bool     attract;               // title screen: the field drifts, nobody flies
     bool     paused;
-    bool     confirmQuit;           // holding still while the quit question is up
+    Confirm  confirm;               // holding still while a question is up
     bool     gameOver;
     Fx       fx;                    // cosmetic only, never read by the rules
 } Game;

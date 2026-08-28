@@ -2,19 +2,16 @@
 #include "game.h"
 #include "fx.h"
 #include "audio.h"
+#include "input.h"
 
 #include <string.h>
 
 #define FIXED_DT (1.0f / 60.0f)
 
-static Input read_input(void)
-{
-    Input in = { 0 };
-    if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) in.turn -= 1.0f;
-    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) in.turn += 1.0f;
-    in.thrust = IsKeyDown(KEY_UP) || IsKeyDown(KEY_W);
-    return in;
-}
+// Not quite black. An OLED television dims its whole picture when what it is
+// shown is this close to empty, and four levels of grey is the least that stops
+// it: below what an eye picks out on any screen, and the look loses nothing.
+static const Color SPACE_BLACK = { 4, 4, 4, 255 };
 
 int main(int argc, char **argv)
 {
@@ -41,28 +38,40 @@ int main(int argc, char **argv)
     bool  pendingFire = false;      // held until an update step consumes it
     bool  quit        = false;
 
-    // The close button still means what it says; only Esc, which is easy to
-    // hit by accident, is worth a question.
+    // The close button still means what it says; only Esc and B, which are
+    // easy to hit by accident, are worth a question.
     while (!quit && !WindowShouldClose()) {
-        if (game.confirmQuit) {
-            // Nothing else is read while the question is up, so answering it
-            // cannot also fire a shot or restart the run.
-            if (IsKeyPressed(KEY_Y) || IsKeyPressed(KEY_ENTER))  quit = true;
-            if (IsKeyPressed(KEY_N) || IsKeyPressed(KEY_ESCAPE)) game.confirmQuit = false;
-        } else if (IsKeyPressed(KEY_ESCAPE)) {
-            game.confirmQuit = true;
+        input_poll();
+
+        if (game.confirm != CONFIRM_NONE) {
+            // Nothing else is read while a question is up, so answering it
+            // cannot also fire a shot or start a run.
+            if (game.confirm == CONFIRM_QUIT) {
+                if (input_confirm_quit())    quit = true;
+                else if (input_cancel())     game.confirm = CONFIRM_NONE;
+            } else {
+                if (input_confirm_restart()) game_init(&game);
+                else if (input_cancel())     game.confirm = CONFIRM_NONE;
+            }
+        } else if (input_quit()) {
+            game.confirm = CONFIRM_QUIT;
         } else if (game.attract) {
-            // Any key at all starts the run, and nothing else happens this
+            // Anything at all starts the run, and nothing else happens this
             // frame: handling the game keys as well would start it paused.
-            if (GetKeyPressed() != 0) game_init(&game);
+            if (input_any()) game_init(&game);
         } else {
-            if (IsKeyPressed(KEY_P)) game.paused = !game.paused;
-            if (IsKeyPressed(KEY_M)) audio_set_music(!audio_music_on());
-            if (IsKeyPressed(KEY_R)) game_init(&game);
-            if (IsKeyPressed(KEY_SPACE)) pendingFire = true;
+            if (input_pause())   game.paused = !game.paused;
+            if (input_music())   audio_set_music(!audio_music_on());
+            // Once the run is over there is nothing left to lose, so the
+            // question is only worth asking mid-flight.
+            if (input_restart()) {
+                if (game.gameOver) game_init(&game);
+                else               game.confirm = CONFIRM_RESTART;
+            }
+            if (input_fire())    pendingFire = true;
         }
 
-        Input in = read_input();
+        Input in = input_read();
         in.fire  = pendingFire;
 
         // Fixed timestep: physics stays identical whatever the framerate does.
@@ -80,7 +89,7 @@ int main(int argc, char **argv)
         audio_update(GetFrameTime());
 
         BeginDrawing();
-            ClearBackground(BLACK);
+            ClearBackground(SPACE_BLACK);
             game_draw(&game);
             if (showFPS)
                 DrawFPS(20, WORLD_H - 30);

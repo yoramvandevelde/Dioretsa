@@ -6,15 +6,17 @@ An asteroids game about flying badly. Wait... are _those_ following me?
 
 ## Playing
 
-| Key             | Action           |
-| --------------- | ---------------- |
-| Left/Right, A/D | turn             |
-| Up, W           | thrust           |
-| Space           | fire             |
-| P               | pause            |
-| R               | restart          |
-| M               | music on/off     |
-| Esc             | quit, asks first |
+| Key             | Controller        | Action              |
+| --------------- | ----------------- | ------------------- |
+| Left/Right, A/D | Left stick, D-pad | turn                |
+| Up, W           | A, RT, D-pad up   | thrust              |
+| Space           | X, RB             | fire                |
+| P               | Start             | pause               |
+| R               | Y                 | restart, asks first |
+| M               | View              | music on/off        |
+| Esc             | B                 | quit, asks first    |
+
+The stick turns as far as you push it; the D-pad and the keys turn flat out.
 
 
 ## Running it
