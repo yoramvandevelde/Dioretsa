@@ -57,7 +57,10 @@ bundle-contents:
 # so Android never refuses an install as a downgrade and nothing has to be
 # bumped by hand. The release build additionally needs the keystore in place at
 # android/app/upload-keystore.jks, and SIGNING_KEYSTORE_PASSWORD,
-# SIGNING_KEY_PASSWORD and SIGNING_KEY_ALIAS exported.
+# SIGNING_KEY_PASSWORD and SIGNING_KEY_ALIAS in the environment. It reads those
+# from .github/signing.env when that file exists, so they do not have to live in
+# a shell profile where a second project would collide with them. See
+# .github/signing.env.example.
 
 # Build a debug APK and install it on a device.
 build-install device:
@@ -74,6 +77,9 @@ build-install device:
 build-install-release device:
     #!/usr/bin/env bash
     set -euo pipefail
+    # This wins over anything already exported, which is the point: a launcher
+    # password sitting in a shell profile must not end up signing this.
+    if [ -f .github/signing.env ]; then source .github/signing.env; fi
     export JAVA_HOME="${JAVA_HOME_25:-$(mise where java@temurin-25)}"
     export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
     export PATH="$JAVA_HOME/bin:$PATH"

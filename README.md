@@ -56,6 +56,15 @@ The Android toolchain is a JDK 25, the SDK, NDK 28 and CMake 3.31 or newer;
 `sdkmanager "cmake;3.31.6"` if the SDK only has the 3.22 it installs by default,
 which raylib is too new for.
 
+Releasing works the same as for the other three: push a `YYYY.MM.DD` tag and the
+workflow builds all four, signs the APK and hangs everything on the same release.
+That wants four repository secrets: `SIGNING_JKS_FILE_BASE64`, which is the
+keystore itself (`base64 -i android/app/upload-keystore.jks`), plus
+`SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`.
+Locally those three come from `.github/signing.env`, which is git-ignored;
+`.github/signing.env.example` explains how to make the keystore and what to put
+in it.
+
 ## Credits
 
 Music: [Dark Cinematic Ambient Tension v2](https://pixabay.com/music/chase-scene-dark-cinematic-ambient-tension-v2-461304/)

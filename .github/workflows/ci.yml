@@ -39,3 +39,25 @@ jobs:
 
       - name: Build
         run: cmake --build build --config Release
+
+  # The APK needs a toolchain none of the matrix rows have, and no signing key:
+  # a debug build proves the same thing about the code.
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install the NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;28.2.13676358" "cmake;3.31.6" > /dev/null
+
+      - name: Build
+        run: ./android/gradlew -p android assembleDebug

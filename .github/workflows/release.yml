@@ -77,8 +77,62 @@ jobs:
           name: dioretsa-${{ matrix.platform }}
           path: dist/*.zip
 
-  publish:
+  # Android does not fit the matrix above: a different toolchain, a signing key,
+  # and one APK instead of a folder and a zip. It waits for the matrix so the tag
+  # has been checked before anything gets signed.
+  android:
+    name: Android
     needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      # The runner image carries an Android SDK, but not the NDK this project
+      # pins, and not a CMake new enough for raylib, which wants 3.25 or better.
+      - name: Install the NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;28.2.13676358" "cmake;3.31.6" > /dev/null
+
+      - name: Decode the signing keystore
+        run: echo -n "${{ secrets.SIGNING_JKS_FILE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
+
+      # The tag is the version, and the run number is the version code: it only
+      # ever goes up, so an install is never refused as a downgrade.
+      - name: Build
+        env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: |
+          ./android/gradlew -p android assembleRelease \
+            -PversionName="${GITHUB_REF_NAME}" -PversionCode="${GITHUB_RUN_NUMBER}"
+
+      # Even on a failed build: a private key has no business outliving the job
+      # that needed it.
+      - name: Remove the signing keystore
+        if: always()
+        run: rm -f android/app/upload-keystore.jks
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "dist/dioretsa-${GITHUB_REF_NAME}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dioretsa-android
+          path: dist/*.apk
+
+  publish:
+    needs: [build, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -90,5 +144,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.apk
           generate_release_notes: true
