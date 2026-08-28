@@ -1,11 +1,22 @@
 name: CI
 
 on:
+  # Prose does not compile. A change that only touches documentation cannot
+  # break a build, so it does not get one. The list is repeated because GitHub
+  # Actions does not read YAML anchors.
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
   # A merge lands as a push to main, so this covers merged pull requests too.
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
 
 jobs:
   build:
