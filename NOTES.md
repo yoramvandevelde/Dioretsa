@@ -30,9 +30,18 @@ linked or baked in; whichever exists first wins.
 
 Releases are cut by pushing a date tag, `YYYY.MM.DD`, with `-2` and up for a
 second release on the same day. That fires `.github/workflows/release.yml`,
-which builds macOS, Linux and Windows, packages each with the tracked assets,
-and publishes them to a GitHub release. Every pull request and every push to
-main builds all three the same way, so a platform cannot quietly rot.
+which builds macOS, Linux, Windows and Android, packages the first three with
+the tracked assets, signs the APK, and publishes all four to a GitHub release.
+Every pull request and every push to main builds the same four, the APK unsigned
+because a check has no business holding the key, so a platform cannot quietly
+rot.
+
+Signing wants four repository secrets: `SIGNING_JKS_FILE_BASE64`, which is the
+keystore itself (`base64 -i android/app/upload-keystore.jks`), plus
+`SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`.
+Locally those three come from `.github/signing.env`, which is git-ignored;
+`.github/signing.env.example` explains how to make the keystore and what to put
+in it.
 
 ## Layout
 
