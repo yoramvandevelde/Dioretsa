@@ -9,8 +9,11 @@ android/.gradle/
 android/app/.cxx/
 android/local.properties
 
-# The signing keystore is a private key and never belongs in a repository.
+# Signing. The keystore is a private key and the passwords are secrets; neither
+# belongs in a repository. .github/signing.env.example shows the shape of the
+# second without holding anything itself.
 android/app/*.jks
+.github/signing.env
 
 # rfxgen project files, the wavs are what the game needs
 *.rfx
