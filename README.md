@@ -6,18 +6,17 @@ An asteroids game about flying badly. Wait... are _those_ following me?
 
 ## Playing
 
-| Key             | Controller        | Action              |
-| --------------- | ----------------- | ------------------- |
-| Left/Right, A/D | Left stick, D-pad | turn                |
-| Up, W           | A, RT, D-pad up   | thrust              |
-| Space           | X, RB             | fire                |
-| P               | Start             | pause               |
+| Key             | Controller        | Action           |
+| --------------- | ----------------- | ---------------- |
+| Left/Right, A/D | Left stick, D-pad | turn             |
+| Up, W           | A, RT, D-pad up   | thrust           |
+| Space           | X, RB             | fire             |
+| P               | Start             | pause            |
 | R               | Y                 | restart, asks first |
-| M               | View              | music on/off        |
-| Esc             | B                 | quit, asks first    |
+| M               | View              | music on/off     |
+| Esc             | B, Back           | quit, asks first |
 
 The stick turns as far as you push it; the D-pad and the keys turn flat out.
-
 
 ## Running it
 
@@ -36,6 +35,26 @@ just run
 
 `just` on its own lists everything else, including `just bundle-mac`, which
 builds a version that runs on any Mac without Homebrew.
+
+## On a television
+
+There is an Android build for Google TV, made from the same source as every
+other one. It wants a game controller; the table above is the whole of it, with
+the remote's back button asking the same question Esc does.
+
+```sh
+just build-install <device>
+```
+
+`adb devices` lists what is connected, and a Google TV usually needs an
+`adb connect <ip>:5555` before it shows up there. `just build-install-release`
+builds the signed one instead, and expects `SIGNING_KEYSTORE_PASSWORD`,
+`SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS` in the environment with the
+keystore at `android/app/upload-keystore.jks`.
+
+The Android toolchain is a JDK 25, the SDK, NDK 28 and CMake 3.31 or newer;
+`sdkmanager "cmake;3.31.6"` if the SDK only has the 3.22 it installs by default,
+which raylib is too new for.
 
 ## Credits
 

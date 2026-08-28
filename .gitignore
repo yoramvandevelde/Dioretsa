@@ -4,6 +4,14 @@ dist/
 compile_commands.json
 .DS_Store
 
+# Android. build/ above already covers android/app/build.
+android/.gradle/
+android/app/.cxx/
+android/local.properties
+
+# The signing keystore is a private key and never belongs in a repository.
+android/app/*.jks
+
 # rfxgen project files, the wavs are what the game needs
 *.rfx
 
