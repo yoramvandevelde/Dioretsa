@@ -19,9 +19,11 @@ static Input read_input(void)
 int main(int argc, char **argv)
 {
     bool skipMenu = false;
+    bool showFPS = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--godmode") == 0)  game_set_god_mode(true);
         if (strcmp(argv[i], "--skip-menu") == 0) skipMenu = true;
+        if (strcmp(argv[i], "--fps") == 0) showFPS = true;
     }
 
     InitWindow(WORLD_W, WORLD_H, "Dioretsa");
@@ -80,7 +82,8 @@ int main(int argc, char **argv)
         BeginDrawing();
             ClearBackground(BLACK);
             game_draw(&game);
-            DrawFPS(20, WORLD_H - 30);
+            if (showFPS)
+                DrawFPS(20, WORLD_H - 30);
         EndDrawing();
     }
 
