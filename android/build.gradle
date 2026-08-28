@@ -1,0 +1,12 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Everything Gradle produces lands in android/build, next to the desktop
+// build/ and build-bundle/ directories, and is ignored the same way.
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

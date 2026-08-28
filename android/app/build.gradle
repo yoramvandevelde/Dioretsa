@@ -1,0 +1,97 @@
+plugins {
+    id "com.android.application"
+}
+
+// Same three variables the launcher release cycle already uses, read the same
+// way. A missing one is left unset rather than stored as the string "null", so
+// a release build fails with "signing config incomplete" instead of the far
+// more confusing "keystore password was incorrect".
+def secretProperties = new Properties()
+["signing_keystore_password": "SIGNING_KEYSTORE_PASSWORD",
+ "signing_key_password": "SIGNING_KEY_PASSWORD",
+ "signing_key_alias": "SIGNING_KEY_ALIAS"].each { propName, envName ->
+    def value = System.getenv(envName)
+    if (value != null) {
+        secretProperties.setProperty(propName, value)
+    }
+}
+
+// The justfile stamps both of these; the defaults are only here so that a bare
+// `./gradlew assembleDebug` still produces something installable.
+def buildName = project.findProperty("versionName") ?: "0.0.0-dev"
+def buildNumber = (project.findProperty("versionCode") ?: "1").toInteger()
+
+android {
+    namespace "io.sifft.dioretsa"
+    compileSdk 36
+    ndkVersion "28.2.13676358"
+
+    defaultConfig {
+        applicationId "io.sifft.dioretsa"
+        minSdk 24
+        targetSdk 34
+        versionCode buildNumber
+        versionName buildName
+
+        // The Google TV Streamer runs a 32-bit userspace and offers armeabi-v7a
+        // and nothing else, while the Android TV emulator on an Apple Silicon
+        // Mac is arm64-v8a. Both are listed so that one APK installs on either.
+        // Each costs its own build of raylib, which is the slow part; drop the
+        // one you never install on if you want the build back.
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+    }
+
+    // One source of truth for what compiles: the CMakeLists the desktop builds
+    // use. It grows an Android branch rather than a second copy of the file
+    // list, so a new .c file is added in one place.
+    externalNativeBuild {
+        cmake {
+            path "../../CMakeLists.txt"
+            // raylib 6.0 asks for CMake 3.25, which rules out the 3.22.1 the
+            // SDK installs by default. Install this one with
+            // `sdkmanager "cmake;3.31.6"`.
+            version "3.31.6"
+        }
+    }
+
+    sourceSets {
+        // One assets directory, the one in the repository, exactly as the
+        // CMakeLists says. Gradle packs it straight out of the repository root
+        // instead of keeping a copy in here that would drift.
+        main.assets.srcDirs = ["../../assets"]
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    androidResources {
+        // The desktop bundles ship tracked files only, so scratch files in
+        // assets/ never travel. AGP's default pattern already drops dotfiles
+        // and editor leftovers; rfxgen project files are git-ignored for the
+        // same reason and are added here so the APK follows the same rule.
+        ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.rfx"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("upload-keystore.jks")
+            storePassword secretProperties.getProperty("signing_keystore_password")
+            keyAlias secretProperties.getProperty("signing_key_alias")
+            keyPassword secretProperties.getProperty("signing_key_password")
+        }
+    }
+
+    buildTypes {
+        debug {}
+        release {
+            // There is no Java or Kotlin in this app to shrink, so the only
+            // thing minification could do here is cost build time.
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+}

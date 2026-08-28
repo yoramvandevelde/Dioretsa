@@ -42,5 +42,48 @@ bundle-mac: build-bundle
 bundle-contents:
     @git ls-files assets | sed 's|^|  |'
 
+# The Android build. Everything Gradle needs lives under android/, and the C it
+# compiles is the same C the desktop builds use, through the CMakeLists above it.
+#
+# JDK and SDK are resolved inside these recipes rather than at the top of this
+# file, because just evaluates a backtick variable on every run: a `just build`
+# on a machine without mise should not fail over a toolchain only Android wants.
+# Override JAVA_HOME_25 or ANDROID_HOME if either sits somewhere unusual.
+#
+# `adb devices` lists what is connected; a Google TV normally needs
+# `adb connect <ip>:5555` first. Both builds stamp the version as today's date
+# + "-local", which is the release tag format with a marker on it, and the
+# version code as the current unix timestamp: always higher than the last one,
+# so Android never refuses an install as a downgrade and nothing has to be
+# bumped by hand. The release build additionally needs the keystore in place at
+# android/app/upload-keystore.jks, and SIGNING_KEYSTORE_PASSWORD,
+# SIGNING_KEY_PASSWORD and SIGNING_KEY_ALIAS exported.
+
+# Build a debug APK and install it on a device.
+build-install device:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export JAVA_HOME="${JAVA_HOME_25:-$(mise where java@temurin-25)}"
+    export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    ./android/gradlew -p android assembleDebug \
+        -PversionName="$(date +%Y.%m.%d)-local" -PversionCode="$(date +%s)"
+    adb -s {{device}} install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+# Build a signed release APK and install it, for trying one before tagging.
+build-install-release device:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export JAVA_HOME="${JAVA_HOME_25:-$(mise where java@temurin-25)}"
+    export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    ./android/gradlew -p android assembleRelease \
+        -PversionName="$(date +%Y.%m.%d)-local" -PversionCode="$(date +%s)"
+    adb -s {{device}} install -r android/app/build/outputs/apk/release/app-release.apk
+
+# Uninstall: the way between a debug and a release build, which sign differently.
+uninstall device:
+    adb -s {{device}} uninstall io.sifft.dioretsa || true
+
 clean:
-    rm -rf build build-bundle dist
+    rm -rf build build-bundle dist android/app/build android/app/.cxx android/build android/.gradle
