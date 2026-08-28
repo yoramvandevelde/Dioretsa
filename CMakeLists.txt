@@ -39,6 +39,7 @@ add_executable(dioretsa
     src/fx.c
     src/audio.c
     src/assets.c
+    src/input.c
 )
 
 target_include_directories(dioretsa PRIVATE src)

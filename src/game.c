@@ -1,5 +1,6 @@
 #include "game.h"
 #include "audio.h"
+#include "input.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -415,7 +416,7 @@ static void enemy_behave(Enemy *e, const Game *g, float dt)
 
 void game_update(Game *g, const Input *in, float dt)
 {
-    if (g->paused || g->confirmQuit || g->gameOver) {
+    if (g->paused || (g->confirm != CONFIRM_NONE) || g->gameOver) {
         audio_set_engine((EngineState){ .seam = 1.0f });
         return;
     }
@@ -933,14 +934,15 @@ static void draw_banner(const Game *g)
 
 // Drawn last on every screen, over the pause and over the report: whatever was
 // up stays up behind it, so the answer is given where the question was asked.
-static void draw_quit_question(const Game *g)
+static void draw_confirm_question(const Game *g)
 {
-    if (!g->confirmQuit) return;
+    if (g->confirm == CONFIRM_NONE) return;
 
     DrawRectangle(0, 0, WORLD_W, WORLD_H, Fade(BLACK, 0.6f));
-    draw_title("QUIT?", 0.42f, -30.0f, RAYWHITE);
+    draw_title((g->confirm == CONFIRM_QUIT)? "QUIT?" : "RESTART?", 0.42f, -30.0f, RAYWHITE);
 
-    const char *hint = "Y  quit          N  keep playing";
+    const char *hint = (g->confirm == CONFIRM_QUIT)? input_quit_question_hint()
+                                                   : input_restart_question_hint();
     DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H / 2 + 60, 20, RAYWHITE);
 }
 
@@ -955,8 +957,8 @@ void game_draw(const Game *g)
 
         // Breathing slowly, so it reads as waiting rather than as a label.
         float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 1.6f);
-        draw_title("ANY KEY...", 0.62f, 0.0f, Fade(RAYWHITE, 0.45f + 0.55f * pulse));
-        draw_quit_question(g);
+        draw_title(input_start_hint(), 0.62f, 0.0f, Fade(RAYWHITE, 0.45f + 0.55f * pulse));
+        draw_confirm_question(g);
         return;
     }
 
@@ -1000,8 +1002,8 @@ void game_draw(const Game *g)
         (void)h;
         draw_report(g);
 
-        const char *hint = "press R";
+        const char *hint = input_restart_hint();
         DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H - 42, 20, RAYWHITE);
     }
-    draw_quit_question(g);
+    draw_confirm_question(g);
 }
