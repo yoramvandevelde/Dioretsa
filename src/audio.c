@@ -85,7 +85,9 @@ static Sound voices[SND_COUNT][VOICES];
 static int   next[SND_COUNT];
 static bool  loaded[SND_COUNT];
 
-void audio_init(void)
+// Sounds, the engine and the music each stand on their own: a file that will
+// not load takes its own piece out and leaves the rest playing.
+static void load_sounds(void)
 {
     for (int i = 0; i < SND_COUNT; i++) {
         const char *path = asset_path(SOUNDS[i].file);
@@ -103,36 +105,50 @@ void audio_init(void)
 
         loaded[i] = true;
     }
+}
 
-    // The engine never stops once it starts; only its volume moves.
-    const char *enginePath = asset_path(ENGINE_FILE);
-    if (!enginePath) {
+// The engine never stops once it starts; only its volume moves.
+static void load_engine(void)
+{
+    const char *path = asset_path(ENGINE_FILE);
+    if (!path) {
         TraceLog(LOG_WARNING, "sound missing: %s", ENGINE_FILE);
         return;
     }
 
-    engine = LoadMusicStream(enginePath);
+    engine = LoadMusicStream(path);
     if (engine.frameCount == 0) return;
 
     engine.looping = true;
     SetMusicVolume(engine, 0.0f);
     PlayMusicStream(engine);
     engineLoaded = true;
+}
 
-    const char *musicPath = asset_path(MUSIC_FILE);
-    if (!musicPath) {
+static void load_music(void)
+{
+    const char *path = asset_path(MUSIC_FILE);
+    if (!path) {
         TraceLog(LOG_WARNING, "music missing: %s", MUSIC_FILE);
         return;
     }
 
-    track = LoadMusicStream(musicPath);
+    track = LoadMusicStream(path);
     if (track.frameCount == 0) return;
 
     track.looping = true;
     SetMusicVolume(track, 0.0f);        // faded in by audio_update
     PlayMusicStream(track);
     trackLoaded = true;
+}
 
+void audio_init(void)
+{
+    load_sounds();
+    load_engine();
+    load_music();
+
+    // The reverb sits on the whole mix, so it goes on whatever loaded.
     AttachAudioMixedProcessor(reverb_callback);
     audio_set_reverb(true);
 }
