@@ -174,9 +174,11 @@ bool input_any(void)
 
 // The prompts the game draws. They live here, next to the mapping they describe,
 // so that a button moving cannot leave the words behind pointing at the old one.
+// This sits under the game's name now rather than standing on its own in the
+// middle of the screen, so it reads as an instruction and says so.
 const char *input_start_hint(void)
 {
-    return on_gamepad() ? "ANY BUTTON..." : "ANY KEY...";
+    return on_gamepad() ? "PRESS ANY BUTTON" : "PRESS ANY KEY";
 }
 
 const char *input_restart_hint(void)

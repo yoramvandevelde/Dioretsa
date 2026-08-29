@@ -19,6 +19,13 @@
 #define BANNER_FROM       0.85f     // held width, as a share of the screen
 #define BANNER_TO         2.60f     // final width, well past the edges
 
+// The title screen. The name is set at the same width as GAME OVER, lifted a
+// little so the pair of it and the invitation underneath sits on the middle of
+// the screen rather than hanging off it.
+#define GAME_NAME         "DIORETSA"
+#define TITLE_LIFT        (-40.0f)  // pixels the name sits above centre
+#define TITLE_GAP         28.0f     // and how far below it the invitation sits
+
 #define PICKUP_CHANCE     10        // percent, on destroying a triangle
 #define PICKUP_LIFE       5.0f      // seconds before it fades away
 #define PICKUP_RADIUS     13.0f
@@ -1303,9 +1310,19 @@ void game_draw(const Game *g)
         }
         fx_glow_pass(FX_GLOW_BOTH);
 
-        // Breathing slowly, so it reads as waiting rather than as a label.
+        // The name, as wide as the screen will take it, over its own drifting
+        // field. It holds still: it is what the game is called, not an
+        // instruction, and a title that pulses reads as something waiting to
+        // be dismissed.
+        float h = draw_title(GAME_NAME, 0.92f, TITLE_LIFT, RAYWHITE);
+
+        // The way in goes underneath, small, and that is the part that
+        // breathes: slowly, so it reads as waiting rather than as a label.
         float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 1.6f);
-        draw_title(input_start_hint(), 0.62f, 0.0f, Fade(RAYWHITE, 0.45f + 0.55f * pulse));
+        hud_centred(input_start_hint(), WORLD_W / 2.0f,
+                    (WORLD_H + h) / 2.0f + TITLE_LIFT + TITLE_GAP, 26,
+                    Fade(RAYWHITE, 0.35f + 0.65f * pulse));
+
         draw_confirm_question(g);
         return;
     }
