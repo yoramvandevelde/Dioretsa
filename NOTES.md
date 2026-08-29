@@ -273,9 +273,36 @@ commit to fetching it.
 ## The title screen
 
 The game opens on its own field: stars panning slowly, enemies drifting, no ship
-and no HUD, with ANY KEY... breathing in the middle. Any key at all starts a run,
-and nothing else is read that frame, or the key you pressed would also pause the
-game or mute the music on the way in. `--skip-menu` goes straight into wave 1.
+and no HUD. The name sits across it at the same width GAME OVER uses, with PRESS
+ANY KEY small underneath. Only the invitation breathes; the title holds still,
+because it is what the game is called rather than something waiting to be
+dismissed. Any key at all starts a run, and nothing else is read that frame, or
+the key you pressed would also pause the game or mute the music on the way in.
+`--skip-menu` goes straight into wave 1.
+
+The launcher art is the same picture: DIORETSA in Archivo Black on the same
+near-black ground, over the same three tiers of star with the same blue and
+amber leanings. It comes in two shapes. The banner is the 16:9 tile a
+television's launcher shows, at the 320x180 Android TV asks for. The icon is
+the square Android wants everywhere else, and is the same wordmark with more
+sky over and under it rather than a crop of the banner, at the documented 80,
+120, 160, 240 and 320 pixel sizes.
+
+Both were drawn at 1280 wide by a throwaway that is not kept, and reduced at the
+end, so the downscale does the antialiasing on the glyphs and on the cut corners
+alike, and the stars are
+sized up from the game's one or two pixels far enough that the smallest still
+lands on about a pixel of the finished image. The sky gets proportionally more
+stars when there is more of it to fill, so the square is not a sparser version
+of the same field.
+
+The corners are cut at 5% of the width. There is no radius in the Android TV
+specification at all, which gives sizes and then warns that borders get cropped,
+and Google's own pattern elsewhere is that the platform masks and the asset is
+supplied square. So this is a look rather than a rule, and a launcher may round
+it again on top: harmless, because what is cut goes transparent rather than
+black. Glyph edges are flattened back to fully opaque first, so the corner curve
+is the only transparency in either file.
 
 None of the flags reach Android, where raylib calls `main()` with nothing but a
 program name. The frame counter is the one that is missed there, now that the
