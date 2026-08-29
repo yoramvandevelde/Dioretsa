@@ -85,6 +85,13 @@ does not grow with the field. There are two layers rather than one because the
 particles belong between them. It looks the same: additive light only ever
 adds, so the order haloes go down in cannot matter.
 
+Multisampling is asked for with `FLAG_MSAA_4X_HINT`. A hint is all it is: a
+driver may hand back a plain framebuffer and raylib only logs that it asked, so
+the way to know is to look at an edge. It suits this game because there is
+nothing on screen but geometry edges, and it suits a television in particular
+because the averaging happens in the GPU's own tile memory and never reaches
+main memory, which is the opposite of how it behaves on a desktop card.
+
 The one thing that cannot follow along for free is text, which is baked into a
 texture at load: `fx_load_fonts` takes the scale so the glyphs are cut for the
 size they will be drawn at. There are two cuts of Archivo Black rather than
