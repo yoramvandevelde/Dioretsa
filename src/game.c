@@ -799,16 +799,37 @@ static void draw_pickup(const Pickup *p, bool givesLife)
     }
 }
 
+// Text in the game's own face rather than raylib's built-in one. That font is
+// a ten pixel bitmap, so a television turns it into blocks; this one is cut for
+// the size it lands at. Sizes and positions stay in world units, so a line sits
+// in the same place on any display.
+#define HUD_TRACKING  0.05f     // letter spacing, as a share of the size
+
+static void hud_text(const char *txt, float x, float y, float size, Color color)
+{
+    DrawTextEx(fx_hud_font(), txt, (Vector2){ x, y }, size, size * HUD_TRACKING, color);
+}
+
+static float hud_width(const char *txt, float size)
+{
+    return MeasureTextEx(fx_hud_font(), txt, size, size * HUD_TRACKING).x;
+}
+
+// Centred on x rather than starting there.
+static void hud_centred(const char *txt, float centre, float y, float size, Color color)
+{
+    hud_text(txt, centre - hud_width(txt, size) / 2.0f, y, size, color);
+}
+
 static void draw_hud(const Game *g)
 {
-    DrawText(TextFormat("%06i", g->score), 20, 16, 30, RAYWHITE);
+    hud_text(TextFormat("%06i", g->score), 20, 16, 30, RAYWHITE);
 
-    const char *wave = TextFormat("WAVE %i", g->wave);
-    DrawText(wave, WORLD_W / 2 - MeasureText(wave, 20) / 2, 22, 20, GRAY);
+    hud_centred(TextFormat("WAVE %i", g->wave), WORLD_W / 2.0f, 22, 20, GRAY);
 
     // God mode takes the place of the lives, since there is nothing to count.
     if (godMode) {
-        DrawText("GOD", WORLD_W - 20 - MeasureText("GOD", 30), 16, 30, RED);
+        hud_text("GOD", WORLD_W - 20 - hud_width("GOD", 30), 16, 30, RED);
         return;
     }
 
@@ -821,15 +842,15 @@ static void draw_hud(const Game *g)
 // One line of the report: label left, value right, inside a column.
 static void stat_row(int x, int y, int width, const char *label, const char *value)
 {
-    DrawText(label, x, y, 20, GRAY);
-    DrawText(value, x + width - MeasureText(value, 20), y, 20, RAYWHITE);
+    hud_text(label, x, y, 20, GRAY);
+    hud_text(value, x + width - hud_width(value, 20), y, 20, RAYWHITE);
 }
 
 // A headline figure with its name underneath, for the row along the top.
 static void stat_headline(int centre, int y, const char *value, const char *label)
 {
-    DrawText(value, centre - MeasureText(value, 40) / 2, y, 40, RAYWHITE);
-    DrawText(label, centre - MeasureText(label, 20) / 2, y + 46, 20, GRAY);
+    hud_centred(value, centre, y, 40, RAYWHITE);
+    hud_centred(label, centre, y + 46, 20, GRAY);
 }
 
 static void draw_report(const Game *g)
@@ -845,18 +866,18 @@ static void draw_report(const Game *g)
 
     // Bottom: four columns of detail.
     const int col[4] = { 60, 370, 680, 990 };
-    const int w = 250, top = 470, step = 28;
+    const int w = 270, top = 470, step = 28;
     int total = 0;
     for (int i = 0; i < ENEMY_TYPE_COUNT; i++) total += st->kills[i];
 
-    DrawText("KILLS", col[0], top, 20, DARKGRAY);
+    hud_text("KILLS", col[0], top, 20, DARKGRAY);
     for (int i = ENEMY_TYPE_COUNT - 1, r = 1; i >= 0; i--, r++) {
         stat_row(col[0], top + r * step, w, enemy_type(i)->name, TextFormat("%i", st->kills[i]));
     }
     stat_row(col[0], top + 5 * step, w, "total", TextFormat("%i", total));
 
     int accuracy = st->shots ? (100 * st->hits) / st->shots : 0;
-    DrawText("SHOOTING", col[1], top, 20, DARKGRAY);
+    hud_text("SHOOTING", col[1], top, 20, DARKGRAY);
     stat_row(col[1], top + 1 * step, w, "shots fired", TextFormat("%i", st->shots));
     stat_row(col[1], top + 2 * step, w, "hits",        TextFormat("%i", st->hits));
     stat_row(col[1], top + 3 * step, w, "accuracy",    TextFormat("%i%%", accuracy));
@@ -864,7 +885,7 @@ static void draw_report(const Game *g)
              TextFormat("%.1f", total ? (float)st->shots / total : 0.0f));
 
     int fromGraze = (g->score > 0) ? (100 * st->scoreGraze) / g->score : 0;
-    DrawText("THE DANCE", col[2], top, 20, DARKGRAY);
+    hud_text("THE DANCE", col[2], top, 20, DARKGRAY);
     stat_row(col[2], top + 1 * step, w, "best multiplier",
              st->bestMult ? TextFormat("x%i", st->bestMult) : "-");
     stat_row(col[2], top + 2 * step, w, "longest graze",   TextFormat("%.1fs", st->bestGraze));
@@ -872,7 +893,7 @@ static void draw_report(const Game *g)
     stat_row(col[2], top + 4 * step, w, "closest call",
              (st->closest < 1e8f) ? TextFormat("%.0f px", st->closest) : "-");
 
-    DrawText("PICKUPS", col[3], top, 20, DARKGRAY);
+    hud_text("PICKUPS", col[3], top, 20, DARKGRAY);
     stat_row(col[3], top + 1 * step, w, "lives taken",  TextFormat("%i", st->pickupLife));
     stat_row(col[3], top + 2 * step, w, "bonuses taken", TextFormat("%i", st->pickupBonus));
     stat_row(col[3], top + 3 * step, w, "let slip",     TextFormat("%i", st->pickupMissed));
@@ -887,7 +908,7 @@ static void draw_report(const Game *g)
     if (worst >= 0 && st->deathsBy[worst] > 0) {
         const char *line = TextFormat("most dangerous: %s, %i of your %i deaths",
                                       enemy_type(worst)->name, st->deathsBy[worst], st->deaths);
-        DrawText(line, WORLD_W / 2 - MeasureText(line, 20) / 2, top + 6 * step, 20, GRAY);
+        hud_centred(line, WORLD_W / 2.0f, top + 6 * step, 20, GRAY);
     }
 }
 
@@ -943,7 +964,7 @@ static void draw_confirm_question(const Game *g)
 
     const char *hint = (g->confirm == CONFIRM_QUIT)? input_quit_question_hint()
                                                    : input_restart_question_hint();
-    DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H / 2 + 60, 20, RAYWHITE);
+    hud_centred(hint, WORLD_W / 2.0f, WORLD_H / 2.0f + 60, 20, RAYWHITE);
 }
 
 void game_draw(const Game *g)
@@ -1003,7 +1024,7 @@ void game_draw(const Game *g)
         draw_report(g);
 
         const char *hint = input_restart_hint();
-        DrawText(hint, WORLD_W / 2 - MeasureText(hint, 20) / 2, WORLD_H - 42, 20, RAYWHITE);
+        hud_centred(hint, WORLD_W / 2.0f, WORLD_H - 42, 20, RAYWHITE);
     }
     draw_confirm_question(g);
 }

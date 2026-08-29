@@ -78,10 +78,10 @@ int main(int argc, char **argv)
     SetExitKey(KEY_NULL);       // Esc is ours: it asks rather than quits
     SetTargetFPS(60);
     InitAudioDevice();
-    // The atlas is baked once, at the scale the window opens on. Dragging a
-    // window far past that leaves the banner leaning on bilinear filtering,
+    // The atlases are baked once, at the scale the window opens on. Dragging a
+    // window far past that leaves the text leaning on bilinear filtering,
     // which is a fair trade for not rebuilding a font mid-game.
-    fx_load_title_font(pixel_scale());
+    fx_load_fonts(pixel_scale());
     audio_init();
 
     Game game;
@@ -160,7 +160,7 @@ int main(int argc, char **argv)
     }
 
     audio_shutdown();
-    fx_unload_title_font();
+    fx_unload_fonts();
     CloseAudioDevice();
     CloseWindow();
     return 0;

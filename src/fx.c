@@ -45,39 +45,60 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 // carrying detail nothing on screen is large enough to show.
 #define TITLE_FONT_MAX    (TITLE_FONT_SIZE * 2)
 
+// The HUD gets its own cut of the same face. Setting twenty pixel labels out of
+// the title atlas would mean shrinking a 440 pixel glyph by twenty times, and
+// a font minified that far turns to mush and shimmers as it moves. This is the
+// largest size the HUD sets, so everything smaller scales down a little rather
+// than a lot.
+#define HUD_FONT_SIZE     40
+
 static Font  titleFont     = { 0 };
 static bool  titleLoaded   = false;
+static Font  hudFont       = { 0 };
+static bool  hudLoaded     = false;
 
-void fx_load_title_font(float scale)
+// Rasterises the face at the size it will actually be drawn at. Returns an
+// unloaded font if the file is not there, which the getters read as "fall back".
+static bool load_face(Font *out, int size)
 {
     const char *path = asset_path("ArchivoBlack-Regular.ttf");
-    if (!path) {
-        TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
-        return;
-    }
+    if (!path) return false;
 
-    // Glyphs are rasterised once, so they are baked for the pixels they will
-    // land on: a banner on a 4K set is drawn three times the size it is here.
-    int size = (scale > 1.0f) ? (int)(TITLE_FONT_SIZE * scale) : TITLE_FONT_SIZE;
-    if (size > TITLE_FONT_MAX) size = TITLE_FONT_MAX;
+    *out = LoadFontEx(path, size, NULL, 0);
+    if (out->texture.id == 0) return false;
 
-    titleFont = LoadFontEx(path, size, NULL, 0);
-    if (titleFont.texture.id == 0) return;
-
-    SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
-    titleLoaded = true;
+    SetTextureFilter(out->texture, TEXTURE_FILTER_BILINEAR);
+    return true;
 }
 
-void fx_unload_title_font(void)
+void fx_load_fonts(float scale)
 {
-    if (!titleLoaded) return;
-    UnloadFont(titleFont);
-    titleLoaded = false;
+    if (scale < 1.0f) scale = 1.0f;
+
+    int title = (int)(TITLE_FONT_SIZE * scale);
+    if (title > TITLE_FONT_MAX) title = TITLE_FONT_MAX;
+
+    titleLoaded = load_face(&titleFont, title);
+    hudLoaded   = load_face(&hudFont, (int)(HUD_FONT_SIZE * scale));
+
+    if (!titleLoaded || !hudLoaded)
+        TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
+}
+
+void fx_unload_fonts(void)
+{
+    if (titleLoaded) { UnloadFont(titleFont); titleLoaded = false; }
+    if (hudLoaded)   { UnloadFont(hudFont);   hudLoaded   = false; }
 }
 
 Font fx_title_font(void)
 {
     return titleLoaded ? titleFont : GetFontDefault();
+}
+
+Font fx_hud_font(void)
+{
+    return hudLoaded ? hudFont : GetFontDefault();
 }
 
 // The built-in font carries its own padding, so it needs far looser spacing
