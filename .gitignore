@@ -18,6 +18,9 @@ android/app/*.jks
 # rfxgen project files, the wavs are what the game needs
 *.rfx
 
+# internal notes
+INTERNAL.md
+
 # editor leftovers
 .*.swp
 .*.swo
