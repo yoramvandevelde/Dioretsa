@@ -171,6 +171,11 @@ and no HUD, with ANY KEY... breathing in the middle. Any key at all starts a run
 and nothing else is read that frame, or the key you pressed would also pause the
 game or mute the music on the way in. `--skip-menu` goes straight into wave 1.
 
+None of the flags reach Android, where raylib calls `main()` with nothing but a
+program name. The frame counter is the one that is missed there, now that the
+panel decides how many pixels get drawn, so a debug build switches it on by
+itself and a release never does.
+
 ## Quitting
 
 Esc used to end the run on the spot, because raylib wires it to the exit key by

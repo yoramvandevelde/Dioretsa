@@ -63,6 +63,15 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--fps") == 0) showFPS = true;
     }
 
+    // raylib calls main() with nothing but a program name on Android, so none
+    // of those flags can ever arrive on a television. The frame counter is the
+    // one worth having there, now that the panel decides how many pixels get
+    // drawn, and a debug build is the honest place to switch it on: a release
+    // compiles with NDEBUG and never shows it.
+#if defined(__ANDROID__) && !defined(NDEBUG)
+    showFPS = true;
+#endif
+
 #if defined(__ANDROID__)
     // A television has no window to size. Zero asks raylib for the panel's own
     // resolution, so the framebuffer is the screen rather than a 720p buffer
