@@ -30,6 +30,8 @@ bundle-mac: build-bundle
     out="dist/dioretsa-macos"
     rm -rf "$out" && mkdir -p "$out"
     cp build-bundle/dioretsa "$out/"
+    # The MIT terms are meant to travel with the code, so the licence ships too.
+    cp README.md LICENSE "$out/"
     # Only tracked files travel, so scratch files in assets/ never ride along.
     git ls-files assets | while read -r f; do
         mkdir -p "$out/$(dirname "$f")"

@@ -64,7 +64,8 @@ jobs:
             mkdir -p "dist/$out/$(dirname "$f")"
             cp "$f" "dist/$out/$f"
           done
-          cp README.md "dist/$out/"
+          # The MIT terms are meant to travel with the code, so LICENSE ships too.
+          cp README.md LICENSE "dist/$out/"
           # The Windows runner has 7-Zip but no zip, the other two have zip.
           if [ "${{ matrix.platform }}" = "windows" ]; then
             (cd dist && 7z a -tzip -bso0 "$out.zip" "$out")
