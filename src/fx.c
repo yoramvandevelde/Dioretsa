@@ -7,7 +7,7 @@
 
 // How much of the reference velocity each star layer picks up. Far layers
 // barely move, the near layer slides noticeably.
-static const float LAYER_PARALLAX[STAR_LAYERS] = { 0.05f, 0.7f, 0.14f };
+static const float LAYER_PARALLAX[STAR_LAYERS] = { 0.05f, 0.14f, 0.7f };
 static const float LAYER_SIZE[STAR_LAYERS]     = { 0.1f,  1.2f,  2.1f  };
 static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 
