@@ -72,6 +72,15 @@ int main(int argc, char **argv)
     showFPS = true;
 #endif
 
+    // Antialiasing, and a hint rather than an instruction: a driver is free to
+    // hand back a plain framebuffer, and raylib only logs that it asked. This
+    // game is nothing but geometry edges, which is exactly what multisampling
+    // smooths, and on a television it is close to free because the averaging
+    // happens in the GPU's own tile memory and never reaches main memory. On a
+    // desktop card that trade runs the other way, but there are frames to
+    // spare there.
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+
 #if defined(__ANDROID__)
     // A television has no window to size. Zero asks raylib for the panel's own
     // resolution, so the framebuffer is the screen rather than a 720p buffer
