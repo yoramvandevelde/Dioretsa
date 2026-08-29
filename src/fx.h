@@ -44,7 +44,10 @@ typedef struct {
 // The title font is loaded once, after the window exists, and lives in fx
 // rather than in any Fx instance: it is a GPU resource, not game state.
 // Everything keeps working on the built-in font if the file is missing.
-void fx_load_title_font(void);
+// The scale says how many pixels a world unit covers, so the glyphs are
+// rasterised for the size they are actually drawn at: 1.0 on a 1280x720
+// display, 3.0 on a 4K one.
+void fx_load_title_font(float scale);
 void fx_unload_title_font(void);
 Font fx_title_font(void);
 float fx_title_tracking(void);   // font size over this is the letter spacing

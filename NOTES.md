@@ -58,6 +58,18 @@ distances are measured the short way round (`torus_offset`) so what overlaps on
 screen also overlaps in the maths. `main.c` translates raw keys into
 an `Input` struct, so `game.c` never has to know about key codes.
 
+Those 1280x720 are world units, not pixels. Every rule, distance and speed is
+written in them and nothing in the simulation is allowed to ask how large the
+display is, so the game plays identically on a laptop window and on a
+television. Only the drawing scales: `world_view()` in `main.c` fits the world
+into whatever the window turns out to be and hands `game_draw` a `Camera2D`,
+which means the vectors are rasterised at the panel's own resolution rather
+than drawn once at 720p and stretched. A display that is not 16:9 gets bars,
+and a scissor keeps the glows and the wave banner from spilling into them. The
+one thing that cannot follow along for free is the title font, which is baked
+into a texture at load: `fx_load_title_font` takes the scale so the glyphs are
+cut for the size they will be drawn at.
+
 Enemies and bullets live in fixed-size pools; a slot is free as soon as
 `base.alive` is off. That allows spawning in the middle of an update (an enemy
 splitting apart) without the loop underneath shifting around.

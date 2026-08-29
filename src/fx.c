@@ -38,12 +38,17 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 // Effects run on their own xorshift instead of raylib's GetRandomValue, so
 // spawning particles never shifts the random stream the gameplay draws from.
 // Same input, same run, effects on or off.
-#define TITLE_FONT_SIZE   220       // atlas size; the banner scales down from here
+#define TITLE_FONT_SIZE   220       // atlas size at 1x; the banner scales down from here
+// The atlas grows with the display, but only so far. The largest thing the
+// banner ever sets is around 250 units, so twice the base covers a 4K set with
+// room to spare, and a full 3x atlas would be a six thousand pixel texture
+// carrying detail nothing on screen is large enough to show.
+#define TITLE_FONT_MAX    (TITLE_FONT_SIZE * 2)
 
 static Font  titleFont     = { 0 };
 static bool  titleLoaded   = false;
 
-void fx_load_title_font(void)
+void fx_load_title_font(float scale)
 {
     const char *path = asset_path("ArchivoBlack-Regular.ttf");
     if (!path) {
@@ -51,7 +56,12 @@ void fx_load_title_font(void)
         return;
     }
 
-    titleFont = LoadFontEx(path, TITLE_FONT_SIZE, NULL, 0);
+    // Glyphs are rasterised once, so they are baked for the pixels they will
+    // land on: a banner on a 4K set is drawn three times the size it is here.
+    int size = (scale > 1.0f) ? (int)(TITLE_FONT_SIZE * scale) : TITLE_FONT_SIZE;
+    if (size > TITLE_FONT_MAX) size = TITLE_FONT_MAX;
+
+    titleFont = LoadFontEx(path, size, NULL, 0);
     if (titleFont.texture.id == 0) return;
 
     SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
