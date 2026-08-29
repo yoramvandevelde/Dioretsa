@@ -57,6 +57,16 @@ if(SELF_CONTAINED)
         set(PLATFORM Android CACHE STRING "" FORCE)
     endif()
     FetchContent_MakeAvailable(raylib)
+
+    if(ANDROID)
+        # Everything drawn between two state changes goes into one vertex
+        # buffer, and whatever will not fit forces raylib to upload and draw
+        # what it has so far, mid-picture. That buffer defaults to 2048 quads
+        # on OpenGL ES 2 against 8192 on the desktop, which is why the same
+        # scene batches cleanly on a laptop and comes apart on a television.
+        # A megabyte of vertex buffer is far cheaper than the flushes.
+        target_compile_definitions(raylib PRIVATE RL_DEFAULT_BATCH_BUFFER_ELEMENTS=8192)
+    endif()
 else()
     find_package(raylib ${RAYLIB_VERSION} REQUIRED)
 endif()

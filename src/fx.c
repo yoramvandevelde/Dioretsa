@@ -297,11 +297,36 @@ void fx_draw_scores(const Fx *fx)
     }
 }
 
+// raylib gives every circle 36 segments and every ring whatever it is asked
+// for, which was 64 here. That is the right budget for a shape the size of a
+// face and wildly wrong for a star two pixels across. The cost is not the
+// triangles, it is the room they take: everything drawn between two state
+// changes is batched into one vertex buffer, and on OpenGL ES 2 that buffer
+// holds 2048 quads against the desktop's 8192. At 18 quads a circle the star
+// field on its own overran it every frame, and an overrun is an upload and a
+// draw call in the middle of the picture.
+//
+// So the count comes from the radius, and stops where a silhouette is round
+// enough that more segments change nothing anyone can see.
+static int arc_segments(float radius, float sweepDeg)
+{
+    int n = 6 + (int)(radius * 0.5f);
+    if (n > 20) n = 20;
+
+    n = (int)(n * sweepDeg / 360.0f);
+    return (n < 4) ? 4 : n;
+}
+
+static void dot(Vector2 pos, float radius, Color color)
+{
+    DrawCircleSector(pos, radius, 0.0f, 360.0f, arc_segments(radius, 360.0f), color);
+}
+
 void fx_draw_stars(const Fx *fx)
 {
     for (int i = 0; i < STAR_LAYERS * STARS_PER_LAYER; i++) {
         const Star *s = &fx->stars[i];
-        DrawCircleV(s->pos, s->size, s->color);
+        dot(s->pos, s->size, s->color);
     }
 }
 
@@ -319,7 +344,7 @@ void fx_draw_particles(const Fx *fx)
             (unsigned char)(p->fadeTo.b + (p->color.b - p->fadeTo.b) * t),
             (unsigned char)(255.0f * t)
         };
-        DrawCircleV(p->pos, p->size * (0.45f + 0.55f * t), c);
+        dot(p->pos, p->size * (0.45f + 0.55f * t), c);
     }
 }
 
@@ -363,11 +388,11 @@ void fx_glow_dot(Vector2 pos, float radius, Color color)
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
     BeginBlendMode(BLEND_ADDITIVE);
-        DrawCircleV(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
-        DrawCircleV(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
+        dot(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
+        dot(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
     EndBlendMode();
 
-    DrawCircleV(pos, radius, color);
+    dot(pos, radius, color);
 }
 
 void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Color color)
@@ -380,12 +405,14 @@ void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Col
     float from = -90.0f;
     float to   = from + sweepDeg;
 
+    int seg = arc_segments(radius, sweepDeg);
+
     BeginBlendMode(BLEND_ADDITIVE);
-        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, 64,
+        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, seg,
                  Fade(color, GLOW_WIDE_ALPHA * a));
     EndBlendMode();
 
-    DrawRing(pos, radius - half, radius + half, from, to, 64, color);
+    DrawRing(pos, radius - half, radius + half, from, to, seg, color);
 }
 
 void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)

@@ -65,8 +65,18 @@ television. Only the drawing scales: `world_view()` in `main.c` fits the world
 into whatever the window turns out to be and hands `game_draw` a `Camera2D`,
 which means the vectors are rasterised at the panel's own resolution rather
 than drawn once at 720p and stretched. A display that is not 16:9 gets bars,
-and a scissor keeps the glows and the wave banner from spilling into them. The
-one thing that cannot follow along for free is text, which is baked into a
+and a scissor keeps the glows and the wave banner from spilling into them.
+
+Everything drawn between two state changes is batched into one vertex buffer
+and sent in a single call, so the cost of a shape is the room it takes in that
+buffer more than the pixels it covers. raylib gives every circle 36 segments
+whatever its radius, which is 18 quads for a star two pixels across, and the
+buffer on OpenGL ES 2 holds a quarter of what the desktop one does: the star
+field alone used to overrun it every frame and force an upload mid-picture.
+`arc_segments` in `fx.c` takes the count from the radius instead, and the
+Android build asks raylib for the desktop-sized buffer.
+
+The one thing that cannot follow along for free is text, which is baked into a
 texture at load: `fx_load_fonts` takes the scale so the glyphs are cut for the
 size they will be drawn at. There are two cuts of Archivo Black rather than
 one, because the banner and the HUD are an order of magnitude apart and a font
