@@ -49,7 +49,7 @@ in it.
 - `src/game.h` - data: `Entity`, `Ship`, `Bullet`, `Enemy`, `EnemyType`, `Game`, `Input`
 - `src/game.c` - update, collisions and drawing
 - `src/fx.h` / `src/fx.c` - star field, particles, glow helpers and the title font
-- `assets/` - Archivo Black, used for the wave title only
+- `assets/` - Archivo Black, used for every word on screen
 
 The world is 1280x720 and wraps on every edge, exactly one world across.
 Anything straddling an edge is drawn on the far side as well (`ghost_positions`),
@@ -57,6 +57,39 @@ corners included, so objects slide across instead of popping in and out, and
 distances are measured the short way round (`torus_offset`) so what overlaps on
 screen also overlaps in the maths. `main.c` translates raw keys into
 an `Input` struct, so `game.c` never has to know about key codes.
+
+Those 1280x720 are world units, not pixels. Every rule, distance and speed is
+written in them and nothing in the simulation is allowed to ask how large the
+display is, so the game plays identically on a laptop window and on a
+television. Only the drawing scales: `world_view()` in `main.c` fits the world
+into whatever the window turns out to be and hands `game_draw` a `Camera2D`,
+which means the vectors are rasterised at the panel's own resolution rather
+than drawn once at 720p and stretched. A display that is not 16:9 gets bars,
+and a scissor keeps the glows and the wave banner from spilling into them.
+
+Everything drawn between two state changes is batched into one vertex buffer
+and sent in a single call, so the cost of a shape is the room it takes in that
+buffer more than the pixels it covers. raylib gives every circle 36 segments
+whatever its radius, which is 18 quads for a star two pixels across, and the
+buffer on OpenGL ES 2 holds a quarter of what the desktop one does: the star
+field alone used to overrun it every frame and force an upload mid-picture.
+`arc_segments` in `fx.c` takes the count from the radius instead, and the
+Android build asks raylib for the desktop-sized buffer.
+
+The other thing that empties that buffer is a change of blend mode, and a glow
+is additive haloes with a crisp line over them, so drawing objects whole meant
+flipping the mode twice per object: measured at 38 to 60 flushes a frame on the
+opening waves and worse later. `fx_glow_pass` lets a caller draw a whole
+layer's haloes and then that layer's lines, which is six changes a frame and
+does not grow with the field. There are two layers rather than one because the
+particles belong between them. It looks the same: additive light only ever
+adds, so the order haloes go down in cannot matter.
+
+The one thing that cannot follow along for free is text, which is baked into a
+texture at load: `fx_load_fonts` takes the scale so the glyphs are cut for the
+size they will be drawn at. There are two cuts of Archivo Black rather than
+one, because the banner and the HUD are an order of magnitude apart and a font
+minified by twenty times shimmers as it moves.
 
 Enemies and bullets live in fixed-size pools; a slot is free as soon as
 `base.alive` is off. That allows spawning in the middle of an update (an enemy
@@ -156,6 +189,11 @@ The game opens on its own field: stars panning slowly, enemies drifting, no ship
 and no HUD, with ANY KEY... breathing in the middle. Any key at all starts a run,
 and nothing else is read that frame, or the key you pressed would also pause the
 game or mute the music on the way in. `--skip-menu` goes straight into wave 1.
+
+None of the flags reach Android, where raylib calls `main()` with nothing but a
+program name. The frame counter is the one that is missed there, now that the
+panel decides how many pixels get drawn, so a debug build switches it on by
+itself and a release never does.
 
 ## Quitting
 

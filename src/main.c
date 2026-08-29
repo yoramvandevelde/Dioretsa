@@ -13,6 +13,46 @@
 // it: below what an eye picks out on any screen, and the look loses nothing.
 static const Color SPACE_BLACK = { 4, 4, 4, 255 };
 
+// Fits the world into a space of the given size without changing its shape.
+static float fit_scale(float w, float h)
+{
+    float sx = w / (float)WORLD_W;
+    float sy = h / (float)WORLD_H;
+    return (sx < sy) ? sx : sy;
+}
+
+// The world is 1280x720 and stays that way whatever the display is: every rule,
+// distance and speed is written in those units, so nothing in the simulation
+// may learn how many pixels there happen to be. Only the drawing scales, which
+// is what lets a 4K television rasterise these vectors at its own resolution
+// instead of stretching a 720p picture over nine times the pixels.
+//
+// A display that is not 16:9 gets bars rather than a stretched world.
+static Camera2D world_view(void)
+{
+    float w = (float)GetScreenWidth();
+    float h = (float)GetScreenHeight();
+    float s = fit_scale(w, h);
+
+    Camera2D cam = { 0 };
+    cam.offset = (Vector2){ (w - WORLD_W * s) / 2.0f, (h - WORLD_H * s) / 2.0f };
+    cam.zoom   = s;
+    return cam;
+}
+
+// World units to real pixels, which is what a font atlas has to be baked for.
+// The view scale is in whatever unit the platform measures the window in, and a
+// desktop high-density display quietly multiplies that again; Android reports a
+// density that is not a framebuffer multiplier, so there it must not count.
+static float pixel_scale(void)
+{
+#if defined(__ANDROID__)
+    return world_view().zoom;
+#else
+    return world_view().zoom * GetWindowScaleDPI().x;
+#endif
+}
+
 int main(int argc, char **argv)
 {
     bool skipMenu = false;
@@ -23,11 +63,34 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--fps") == 0) showFPS = true;
     }
 
+    // raylib calls main() with nothing but a program name on Android, so none
+    // of those flags can ever arrive on a television. The frame counter is the
+    // one worth having there, now that the panel decides how many pixels get
+    // drawn, and a debug build is the honest place to switch it on: a release
+    // compiles with NDEBUG and never shows it.
+#if defined(__ANDROID__) && !defined(NDEBUG)
+    showFPS = true;
+#endif
+
+#if defined(__ANDROID__)
+    // A television has no window to size. Zero asks raylib for the panel's own
+    // resolution, so the framebuffer is the screen rather than a 720p buffer
+    // the set has to stretch back up to it.
+    InitWindow(0, 0, "Dioretsa");
+#else
+    // HIGHDPI so a retina panel draws at its real pixel count instead of
+    // upscaling, RESIZABLE so the window can be dragged to any size and the
+    // picture follows it.
+    SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_RESIZABLE);
     InitWindow(WORLD_W, WORLD_H, "Dioretsa");
+#endif
     SetExitKey(KEY_NULL);       // Esc is ours: it asks rather than quits
     SetTargetFPS(60);
     InitAudioDevice();
-    fx_load_title_font();
+    // The atlases are baked once, at the scale the window opens on. Dragging a
+    // window far past that leaves the text leaning on bilinear filtering,
+    // which is a fair trade for not rebuilding a font mid-game.
+    fx_load_fonts(pixel_scale());
     audio_init();
 
     Game game;
@@ -88,16 +151,25 @@ int main(int argc, char **argv)
 
         audio_update(GetFrameTime());
 
+        Camera2D view = world_view();
+
         BeginDrawing();
             ClearBackground(SPACE_BLACK);
-            game_draw(&game);
-            if (showFPS)
-                DrawFPS(20, WORLD_H - 30);
+            // Glows and wrapped ghosts reach past the world edge, and the wave
+            // banner zooms straight through it, so the bars are fenced off.
+            BeginScissorMode((int)view.offset.x, (int)view.offset.y,
+                             (int)(WORLD_W * view.zoom), (int)(WORLD_H * view.zoom));
+                BeginMode2D(view);
+                    game_draw(&game);
+                    if (showFPS)
+                        DrawFPS(20, WORLD_H - 30);
+                EndMode2D();
+            EndScissorMode();
         EndDrawing();
     }
 
     audio_shutdown();
-    fx_unload_title_font();
+    fx_unload_fonts();
     CloseAudioDevice();
     CloseWindow();
     return 0;

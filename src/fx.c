@@ -38,36 +38,67 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 // Effects run on their own xorshift instead of raylib's GetRandomValue, so
 // spawning particles never shifts the random stream the gameplay draws from.
 // Same input, same run, effects on or off.
-#define TITLE_FONT_SIZE   220       // atlas size; the banner scales down from here
+#define TITLE_FONT_SIZE   220       // atlas size at 1x; the banner scales down from here
+// The atlas grows with the display, but only so far. The largest thing the
+// banner ever sets is around 250 units, so twice the base covers a 4K set with
+// room to spare, and a full 3x atlas would be a six thousand pixel texture
+// carrying detail nothing on screen is large enough to show.
+#define TITLE_FONT_MAX    (TITLE_FONT_SIZE * 2)
+
+// The HUD gets its own cut of the same face. Setting twenty pixel labels out of
+// the title atlas would mean shrinking a 440 pixel glyph by twenty times, and
+// a font minified that far turns to mush and shimmers as it moves. This is the
+// largest size the HUD sets, so everything smaller scales down a little rather
+// than a lot.
+#define HUD_FONT_SIZE     40
 
 static Font  titleFont     = { 0 };
 static bool  titleLoaded   = false;
+static Font  hudFont       = { 0 };
+static bool  hudLoaded     = false;
 
-void fx_load_title_font(void)
+// Rasterises the face at the size it will actually be drawn at. Returns an
+// unloaded font if the file is not there, which the getters read as "fall back".
+static bool load_face(Font *out, int size)
 {
     const char *path = asset_path("ArchivoBlack-Regular.ttf");
-    if (!path) {
-        TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
-        return;
-    }
+    if (!path) return false;
 
-    titleFont = LoadFontEx(path, TITLE_FONT_SIZE, NULL, 0);
-    if (titleFont.texture.id == 0) return;
+    *out = LoadFontEx(path, size, NULL, 0);
+    if (out->texture.id == 0) return false;
 
-    SetTextureFilter(titleFont.texture, TEXTURE_FILTER_BILINEAR);
-    titleLoaded = true;
+    SetTextureFilter(out->texture, TEXTURE_FILTER_BILINEAR);
+    return true;
 }
 
-void fx_unload_title_font(void)
+void fx_load_fonts(float scale)
 {
-    if (!titleLoaded) return;
-    UnloadFont(titleFont);
-    titleLoaded = false;
+    if (scale < 1.0f) scale = 1.0f;
+
+    int title = (int)(TITLE_FONT_SIZE * scale);
+    if (title > TITLE_FONT_MAX) title = TITLE_FONT_MAX;
+
+    titleLoaded = load_face(&titleFont, title);
+    hudLoaded   = load_face(&hudFont, (int)(HUD_FONT_SIZE * scale));
+
+    if (!titleLoaded || !hudLoaded)
+        TraceLog(LOG_WARNING, "title font not found, falling back to the built-in one");
+}
+
+void fx_unload_fonts(void)
+{
+    if (titleLoaded) { UnloadFont(titleFont); titleLoaded = false; }
+    if (hudLoaded)   { UnloadFont(hudFont);   hudLoaded   = false; }
 }
 
 Font fx_title_font(void)
 {
     return titleLoaded ? titleFont : GetFontDefault();
+}
+
+Font fx_hud_font(void)
+{
+    return hudLoaded ? hudFont : GetFontDefault();
 }
 
 // The built-in font carries its own padding, so it needs far looser spacing
@@ -266,11 +297,36 @@ void fx_draw_scores(const Fx *fx)
     }
 }
 
+// raylib gives every circle 36 segments and every ring whatever it is asked
+// for, which was 64 here. That is the right budget for a shape the size of a
+// face and wildly wrong for a star two pixels across. The cost is not the
+// triangles, it is the room they take: everything drawn between two state
+// changes is batched into one vertex buffer, and on OpenGL ES 2 that buffer
+// holds 2048 quads against the desktop's 8192. At 18 quads a circle the star
+// field on its own overran it every frame, and an overrun is an upload and a
+// draw call in the middle of the picture.
+//
+// So the count comes from the radius, and stops where a silhouette is round
+// enough that more segments change nothing anyone can see.
+static int arc_segments(float radius, float sweepDeg)
+{
+    int n = 6 + (int)(radius * 0.5f);
+    if (n > 20) n = 20;
+
+    n = (int)(n * sweepDeg / 360.0f);
+    return (n < 4) ? 4 : n;
+}
+
+static void dot(Vector2 pos, float radius, Color color)
+{
+    DrawCircleSector(pos, radius, 0.0f, 360.0f, arc_segments(radius, 360.0f), color);
+}
+
 void fx_draw_stars(const Fx *fx)
 {
     for (int i = 0; i < STAR_LAYERS * STARS_PER_LAYER; i++) {
         const Star *s = &fx->stars[i];
-        DrawCircleV(s->pos, s->size, s->color);
+        dot(s->pos, s->size, s->color);
     }
 }
 
@@ -288,9 +344,32 @@ void fx_draw_particles(const Fx *fx)
             (unsigned char)(p->fadeTo.b + (p->color.b - p->fadeTo.b) * t),
             (unsigned char)(255.0f * t)
         };
-        DrawCircleV(p->pos, p->size * (0.45f + 0.55f * t), c);
+        dot(p->pos, p->size * (0.45f + 0.55f * t), c);
     }
 }
+
+// Which half of a glow the calls below draw, see fx.h. Both by default, so a
+// caller that has nothing to group gets whole objects without asking.
+static int glowPass = FX_GLOW_BOTH;
+
+void fx_glow_pass(int pass)
+{
+    if (pass == glowPass) return;
+    glowPass = pass;
+
+    // Whole objects switch to additive and back around their own haloes, so
+    // outside a grouped pass the mode must be left where it was found.
+    if (pass == FX_GLOW_HALO) BeginBlendMode(BLEND_ADDITIVE);
+    else                      EndBlendMode();
+}
+
+static bool draws_halo(void) { return glowPass != FX_GLOW_LINE; }
+static bool draws_line(void) { return glowPass != FX_GLOW_HALO; }
+
+// No-ops inside a grouped pass, where the mode is already set and holding it
+// is the entire point.
+static void halo_begin(void) { if (glowPass == FX_GLOW_BOTH) BeginBlendMode(BLEND_ADDITIVE); }
+static void halo_end(void)   { if (glowPass == FX_GLOW_BOTH) EndBlendMode(); }
 
 // Two soft additive passes underneath, then the crisp line on top. Additive on
 // a black background is what gives it the CRT bloom look.
@@ -298,14 +377,16 @@ void fx_glow_poly(Vector2 center, int sides, float radius, float rotationDeg, Co
 {
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_WIDE,
-                        Fade(color, GLOW_WIDE_ALPHA * a));
-        DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_TIGHT,
-                        Fade(color, GLOW_TIGHT_ALPHA * a));
-    EndBlendMode();
+    if (draws_halo()) {
+        halo_begin();
+            DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_WIDE,
+                            Fade(color, GLOW_WIDE_ALPHA * a));
+            DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_TIGHT,
+                            Fade(color, GLOW_TIGHT_ALPHA * a));
+        halo_end();
+    }
 
-    DrawPolyLines(center, sides, radius, rotationDeg, color);
+    if (draws_line()) DrawPolyLines(center, sides, radius, rotationDeg, color);
 }
 
 void fx_glow_strip(const Vector2 *points, int count, Color color)
@@ -314,29 +395,33 @@ void fx_glow_strip(const Vector2 *points, int count, Color color)
 
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        for (int pass = 0; pass < 2; pass++) {
-            float width = (pass == 0) ? GLOW_WIDE : GLOW_TIGHT;
-            float alpha = ((pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA) * a;
-            for (int i = 0; i < count - 1; i++) {
-                DrawLineEx(points[i], points[i + 1], width, Fade(color, alpha));
+    if (draws_halo()) {
+        halo_begin();
+            for (int pass = 0; pass < 2; pass++) {
+                float width = (pass == 0) ? GLOW_WIDE : GLOW_TIGHT;
+                float alpha = ((pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA) * a;
+                for (int i = 0; i < count - 1; i++) {
+                    DrawLineEx(points[i], points[i + 1], width, Fade(color, alpha));
+                }
             }
-        }
-    EndBlendMode();
+        halo_end();
+    }
 
-    DrawLineStrip((Vector2 *)points, count, color);
+    if (draws_line()) DrawLineStrip((Vector2 *)points, count, color);
 }
 
 void fx_glow_dot(Vector2 pos, float radius, Color color)
 {
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        DrawCircleV(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
-        DrawCircleV(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
-    EndBlendMode();
+    if (draws_halo()) {
+        halo_begin();
+            dot(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
+            dot(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
+        halo_end();
+    }
 
-    DrawCircleV(pos, radius, color);
+    if (draws_line()) dot(pos, radius, color);
 }
 
 void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Color color)
@@ -349,12 +434,16 @@ void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Col
     float from = -90.0f;
     float to   = from + sweepDeg;
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, 64,
-                 Fade(color, GLOW_WIDE_ALPHA * a));
-    EndBlendMode();
+    int seg = arc_segments(radius, sweepDeg);
 
-    DrawRing(pos, radius - half, radius + half, from, to, 64, color);
+    if (draws_halo()) {
+        halo_begin();
+            DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, seg,
+                     Fade(color, GLOW_WIDE_ALPHA * a));
+        halo_end();
+    }
+
+    if (draws_line()) DrawRing(pos, radius - half, radius + half, from, to, seg, color);
 }
 
 void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)

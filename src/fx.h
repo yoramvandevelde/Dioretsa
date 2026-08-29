@@ -41,12 +41,20 @@ typedef struct {
     unsigned int rng;   // effects roll their own dice, see fx.c
 } Fx;
 
-// The title font is loaded once, after the window exists, and lives in fx
-// rather than in any Fx instance: it is a GPU resource, not game state.
-// Everything keeps working on the built-in font if the file is missing.
-void fx_load_title_font(void);
-void fx_unload_title_font(void);
-Font fx_title_font(void);
+// The fonts are loaded once, after the window exists, and live in fx rather
+// than in any Fx instance: they are GPU resources, not game state. Everything
+// keeps working on the built-in font if the file is missing.
+//
+// The scale says how many pixels a world unit covers, so the glyphs are cut
+// for the size they are actually drawn at: 1.0 on a 1280x720 display, 3.0 on
+// a 4K one. There are two cuts of the one face because the banner and the HUD
+// are an order of magnitude apart in size, and a single atlas cannot serve
+// both without one of them blurring.
+void fx_load_fonts(float scale);
+void fx_unload_fonts(void);
+
+Font fx_title_font(void);        // the banner: huge, a handful of words
+Font fx_hud_font(void);          // the score, the wave, the report
 float fx_title_tracking(void);   // font size over this is the letter spacing
 
 void fx_init(Fx *fx);
@@ -73,6 +81,24 @@ void fx_draw_scores(const Fx *fx);      // above the particles
 
 // Vector-arcade glow: a soft additive halo with a crisp bright core on top.
 // These take plain geometry, so they work for any shape the game draws.
+// A glow is two drawings: additive haloes underneath, one crisp line on top.
+// Doing both per object means the blend mode flips twice per object, and a
+// blend mode change makes raylib upload and draw everything it has batched so
+// far. So a caller may split the work: set FX_GLOW_HALO, draw a whole layer,
+// set FX_GLOW_LINE, draw the same layer again. Two blend changes for the
+// layer instead of two per object.
+//
+// It looks the same. Additive light only ever adds, so the order haloes go
+// down in cannot matter, and the only thing that moves is that a crisp line
+// now sits above its neighbours' haloes instead of below them.
+//
+// FX_GLOW_BOTH is the default and draws an object whole, for callers that have
+// nothing to group.
+enum { FX_GLOW_HALO, FX_GLOW_LINE, FX_GLOW_BOTH };
+#define FX_GLOW_PASSES 2
+
+void fx_glow_pass(int pass);
+
 void fx_glow_poly(Vector2 center, int sides, float radius, float rotationDeg, Color color);
 void fx_glow_strip(const Vector2 *points, int count, Color color);
 void fx_glow_dot(Vector2 pos, float radius, Color color);
