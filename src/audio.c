@@ -3,6 +3,8 @@
 
 #include "raylib.h"
 
+#include <stddef.h>
+
 #define VOICES 4        // simultaneous copies of the same sound
 
 #define ENGINE_FILE     "SOUND/ENGINE.wav"
@@ -28,6 +30,13 @@
 #define REV_WET         0.09f
 #define REV_RAMP        0.4f    // wet units per second when toggled
 
+// The saucer is played back a little slow, which on a resampling pitch control
+// drops it as well, so the motor gets heavier at the same time as it gets
+// longer. Cheaper than a second cut of the file, and movable without
+// re-recording anything: 0.95 turns 3.73 seconds into 3.93, against an
+// intruder's visit of roughly four and a quarter.
+#define SAUCER_PITCH    0.95f
+
 #define MUSIC_FILE      "SOUND/rubyzephyr-dark-cinematic-ambient-tension-v2-461304.mp3"
 #define MUSIC_VOLUME    0.35f   // measured: puts it around -24 dB, under everything
 #define MUSIC_RAMP      0.5f    // volume units per second, so two seconds either way
@@ -51,7 +60,11 @@ static const struct {
     [SND_GRAZE]       = { "SOUND/GRAZE.wav",       1.6f },   // file sits 18 dB low
     [SND_GAMEOVER]    = { "SOUND/GAMEOVER.wav",    1.0f },
     [SND_WAVE]        = { "SOUND/WAVE.wav",        0.95f },  // peak-limited: the file is already near full scale
+    [SND_SAUCER]      = { "SOUND/SAUCER.wav",      1.30f },  // recorded 9 dB under the shot, and it has to carry a warning
 };
+
+// The voice the intruder was handed, so its pan can follow it across.
+static Sound *saucer = NULL;
 
 static Music engine;
 static bool  engineLoaded  = false;
@@ -267,6 +280,7 @@ void audio_update(float dt)
 void audio_shutdown(void)
 {
     DetachAudioMixedProcessor(reverb_callback);
+    saucer = NULL;      // the pool it points into is about to go
 
     if (trackLoaded) {
         StopMusicStream(track);
@@ -288,19 +302,41 @@ void audio_shutdown(void)
     }
 }
 
-static void play_ex(SoundId id, float pitch, float pan)
+static Sound *play_ex(SoundId id, float pitch, float pan)
 {
-    if (id < 0 || id >= SND_COUNT || !loaded[id]) return;
+    if (id < 0 || id >= SND_COUNT || !loaded[id]) return NULL;
 
-    Sound s = voices[id][next[id]];
+    Sound *s = &voices[id][next[id]];
     next[id] = (next[id] + 1) % VOICES;
 
     if (pan < -1.0f) pan = -1.0f;
     if (pan >  1.0f) pan =  1.0f;
 
-    SetSoundPitch(s, pitch);
-    SetSoundPan(s, pan);
-    PlaySound(s);
+    SetSoundPitch(*s, pitch);
+    SetSoundPan(*s, pan);
+    PlaySound(*s);
+    return s;
+}
+
+void audio_saucer_start(float pan)
+{
+    saucer = play_ex(SND_SAUCER, SAUCER_PITCH, pan);
+}
+
+void audio_saucer_pan(float pan)
+{
+    if (!saucer || !IsSoundPlaying(*saucer)) return;
+
+    if (pan < -1.0f) pan = -1.0f;
+    if (pan >  1.0f) pan =  1.0f;
+    SetSoundPan(*saucer, pan);
+}
+
+void audio_saucer_stop(void)
+{
+    if (!saucer) return;
+    StopSound(*saucer);
+    saucer = NULL;
 }
 
 // Its own xorshift, for the same reason fx has one: sound must not move the

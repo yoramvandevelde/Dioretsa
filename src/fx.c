@@ -24,6 +24,10 @@ static const unsigned char LAYER_ALPHA[STAR_LAYERS] = { 70, 120, 185 };
 #define MUZZLE_LIFE_MAX   0.14f
 
 #define POP_LIFE          0.85f
+// The intruder's magenta, repeated here rather than shared: fx knows nothing
+// about the rules, and a number floating off a broken shape is a picture, not
+// a score. Keep it in step with INTRUDER_COLOR in game.c.
+#define POP_TAKEN         CLITERAL(Color){ 245, 40, 220, 255 }
 #define POP_RISE          46.0f     // pixels per second the number drifts up
 
 #define DEBRIS_LIFE_MIN   0.35f
@@ -287,13 +291,21 @@ void fx_draw_scores(const Fx *fx)
         const ScorePop *sp = &fx->pops[i];
         if (sp->life <= 0.0f) continue;
 
-        // Bigger rewards land bigger, and everything fades as it rises.
+        // Bigger rewards land bigger, and everything fades as it rises. A
+        // number can also be negative now, so it is the size of the swing that
+        // sets the size of the text, not its sign.
         float t    = sp->life / sp->maxLife;
-        int   size = (sp->value >= 200) ? 40 : (sp->value >= 60) ? 30 : 20;
+        int   mag  = (sp->value < 0) ? -sp->value : sp->value;
+        int   size = (mag >= 200) ? 40 : (mag >= 60) ? 30 : 20;
 
-        const char *txt = TextFormat("+%i", sp->value);
+        // Points taken off are set apart by more than a minus sign: nothing
+        // else that rises off the field is this colour.
+        const char *txt = (sp->value < 0) ? TextFormat("%i", sp->value)
+                                          : TextFormat("+%i", sp->value);
+        Color color = (sp->value < 0) ? POP_TAKEN : GOLD;
+
         DrawText(txt, (int)sp->pos.x - MeasureText(txt, size) / 2, (int)sp->pos.y,
-                 size, Fade(GOLD, t));
+                 size, Fade(color, t));
     }
 }
 
@@ -310,8 +322,12 @@ void fx_draw_scores(const Fx *fx)
 // enough that more segments change nothing anyone can see.
 static int arc_segments(float radius, float sweepDeg)
 {
+    // The ceiling is what keeps the star field cheap, and the stars are all
+    // radius two and under, so it does no work down there at all. It only
+    // binds on the few large shapes, and those are exactly the ones whose
+    // facets are visible: a disc of any size is supposed to read as round.
     int n = 6 + (int)(radius * 0.5f);
-    if (n > 20) n = 20;
+    if (n > 40) n = 40;
 
     n = (int)(n * sweepDeg / 360.0f);
     return (n < 4) ? 4 : n;

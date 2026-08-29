@@ -130,6 +130,86 @@ more of the same. Nothing mutates along the way, so the enemies stay learnable.
 Triangles are never spawned directly. Red is something you make by taking the
 chain apart, which keeps the dance a choice.
 
+## The intruder
+
+That last rule leaves a hole. If red only exists once you have made it, then
+every wave opens with a field that drifts and nothing that hunts, and a player
+who simply stops has nothing to fear. The 1979 machine had the same problem for
+a stronger reason: not one of its rocks ever comes looking for you, so a still
+field is perfectly safe. Atari answered it with the flying saucer on a
+countdown that resets whenever you break a rock, and with a rule that skips the
+rock-count check entirely once that countdown runs out. Stop playing and the
+saucer comes anyway.
+
+The intruder is the same idea with the pressure built into the field rather
+than flown in on top of it. Fifteen seconds without connecting with anything
+and it fades in somewhere on the field, closes on something it picked at
+random, paces it for a beat and breaks it. What it costs you is small and what it leaves
+behind is not: the shape it split is gone from your score, and in its place are
+two faster ones a step nearer the end of the chain. Stand still long enough and
+the field converts itself into triangles, which do the hunting from there.
+
+Three rules keep it honest.
+
+It may only ever split, never finish. Triangles are not targets, and a stray
+shot passes straight through one, so it can never clear the last enemy and hand
+you a wave. It only makes the field worse.
+
+It leaves the moment you hit anything, shot or not, which is the same condition
+that resets the clock. It is here because you stopped and it goes because you
+started, and that is the whole rule in one sentence.
+
+It is worth nothing. Atari made their answer to lurking the most valuable prize
+on the board and shortened its interval as the score climbed, which turned the
+cure into the best farm in the game: park next to one small rock and harvest
+saucers forever. Here the reward for breaking it is that it does not get its
+shot, and the interval never moves.
+
+The punishment that bites is the escalation, not the arithmetic. A hexagon is
+only 20 points, and the deduction is a signal rather than a fine: a score that
+drops reads instantly, where a score that merely stalls does not.
+
+It picks its target flat across everything eligible rather than always the
+largest. Always taking the biggest reads as tidier and played worse: it sent the
+thing wherever the hexagons happened to be, which is usually a corner. The
+escalation survives the change anyway, because what shifts is the pool it draws
+from. Early on the field is hexagons and a stall costs 20; once things have been
+broken down it is mostly squares and a stall costs 100. Twelve minutes of
+standing still measured 29 visits picking 4 hexagons, 9 pentagons and 16
+squares, and never once a triangle. The cost climbs on its own without a number
+to tune it, and the draw keeps it from being something you can count on. The
+deduction floors at zero, because the opening seconds of a run are the one time
+there is genuinely nothing to lose.
+
+Fifteen seconds is deliberately generous. A player pinned down and dodging for
+their life is playing well, and a mechanic that punishes that would deserve to
+be ignored. Nothing counts against you while the ship is gone or while a wave
+title is on screen either.
+
+It appears anywhere in the field rather than arriving from an edge. Coming in
+from outside is a fiction on a world that wraps, and it cost more than the story
+was worth twice over. A disc sitting on x=0 genuinely is at x=1280 as well, so
+`ghost_positions` correctly drew two of it and the arrival read as a glitch. And
+an edge is the one place nobody is looking: it would sit out there, take its
+shot and leave again without ever crossing the picture, which for a thing whose
+whole job is to be noticed is a total failure. So it fades in instead, away from
+the ship and far enough off the edges that its mirrored copies behave from the
+first frame. Fading in also matches how it goes, and nothing else here appears
+from nowhere.
+
+It is a filled disc, and the only round thing in a world of outlined polygons,
+in a magenta that appears nowhere else. It is also the only thing here that steers.
+Everything else is handed a heading at birth and keeps it; this eases onto the
+velocity it wants instead of taking it, and what it wants is the drift of the
+thing it came for plus a closing speed that falls away with the ground left to
+cover. So the approach is a settle rather than an arrival: it is already slowing
+long before it gets there and never has to brake, and once alongside it paces
+its target instead of parking on a spot and letting the target float out from
+under it. It holds its gap off the target's surface, not its centre, so a
+hexagon and a square are given the same room. It is not from here. Breaking it is the single exception to bullets
+being the only thing that breaks anything, since flying into it works too and
+costs nothing: it has no business killing anybody.
+
 ## Waves
 
 Clearing a wave puts its title on screen: one second standing still at 85% of
@@ -225,7 +305,8 @@ Kills and deaths are both broken down per enemy type, which is what makes them
 worth reading side by side: two hundred triangles killed, and four deaths to
 them. The dance column reports the best multiplier, the longest unbroken graze,
 how much of the score came from grazing rather than shooting, and the closest
-you came to something and lived.
+you came to something and lived. The shooting column ends with the points the
+intruder took, which is the only number in the report that went the wrong way.
 
 Text is drawn at multiples of ten because the built-in font has a base size of
 10. Anything else stretches its pixels unevenly and reads as slightly blurred,
@@ -313,6 +394,8 @@ everything else because it plays constantly.
   out. While held up, a red hull pulses on the spawn point so the wait reads as
   the game holding rather than hanging.
 - Score per type, with wave composition hand-authored in a table
+- An intruder that arrives after fifteen seconds without a hit and splits the
+  largest enemy for you, at the cost of its points
 
 Crashing into an enemy costs a life but leaves the enemy intact: no score, no
 split. Only bullets break things apart.

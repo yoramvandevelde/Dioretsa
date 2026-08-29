@@ -40,6 +40,7 @@ typedef struct {
 typedef struct {
     Entity base;
     float  life;            // seconds until it expires
+    bool   hostile;         // fired by the intruder, so it takes rather than pays
 } Bullet;
 
 // Adding an enemy type: one line here, one row in ENEMY_TYPES. Nothing else.
@@ -86,6 +87,21 @@ typedef struct {
     int         hp;                 // room for tougher types later
 } Enemy;
 
+// The answer to standing still. Leave the field alone for long enough and this
+// fades in, breaks something at random, and goes. It never shoots at the ship
+// and it can never finish anything off: all it does is turn a slow field into
+// a fast one, which is the field that comes looking for you. It is the only
+// round thing in a world of polygons, and the only one that steers: everything
+// else here is handed a heading and keeps it, while this eases onto the speed
+// it wants and paces what it came for.
+typedef struct {
+    Entity  base;
+    float   age;            // seconds since it arrived; it will not fire sooner
+    float   leaveIn;        // counts down once it is done, and fades it out
+    Vector2 leaveVel;       // the heading it bolts on, eased onto like any other
+    int     target;         // enemy slot it came for, or -1 for none picked yet
+} Intruder;
+
 // Everything here is a counter on a line of code that already existed. The
 // point is not completeness but what it says about how you played.
 typedef struct {
@@ -97,6 +113,7 @@ typedef struct {
     int   deaths;
     int   pickupLife, pickupBonus, pickupMissed;
     int   scoreShot, scoreGraze;        // where the points came from
+    int   scoreLost;                    // and what the intruder took back
     int   bestMult;                     // most enemies grazed at once
     float bestGraze;                    // longest unbroken graze, seconds
     float closest;                      // smallest gap survived, pixels
@@ -115,6 +132,8 @@ typedef struct {
     Enemy    enemies[MAX_ENEMIES];  // slots: use base.alive, not a count
     Bullet   bullets[MAX_BULLETS];
     Pickup   pickups[MAX_PICKUPS];
+    Intruder intruder;              // at most one at a time
+    float    sinceHit;              // seconds since you last connected with anything
     int      score;
     int      lives;
     int      wave;
