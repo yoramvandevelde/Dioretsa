@@ -972,9 +972,13 @@ void game_draw(const Game *g)
     fx_draw_stars(&g->fx);
 
     if (g->attract) {
-        for (int i = 0; i < MAX_ENEMIES; i++) {
-            if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
+        for (int pass = 0; pass < FX_GLOW_PASSES; pass++) {
+            fx_glow_pass(pass);
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
+            }
         }
+        fx_glow_pass(FX_GLOW_BOTH);
 
         // Breathing slowly, so it reads as waiting rather than as a label.
         float pulse = 0.5f + 0.5f * sinf((float)GetTime() * 1.6f);
@@ -983,25 +987,39 @@ void game_draw(const Game *g)
         return;
     }
 
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
+    // Each group draws all of its haloes and then all of its lines, which
+    // costs the blend mode two changes for the group instead of two per
+    // object. There are two groups rather than one because the particles have
+    // to land between them, and that ordering is the only one anybody can see.
+    for (int pass = 0; pass < FX_GLOW_PASSES; pass++) {
+        fx_glow_pass(pass);
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (g->enemies[i].base.alive) draw_enemy(&g->enemies[i]);
+        }
     }
+    fx_glow_pass(FX_GLOW_BOTH);
 
     fx_draw_particles(&g->fx);      // behind the ship, on top of the world
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!g->bullets[i].base.alive) continue;
 
-        Vector2 at[4];
-        int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
-        for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
-    }
-    for (int i = 0; i < MAX_PICKUPS; i++) {
-        if (g->pickups[i].base.alive) draw_pickup(&g->pickups[i], g->lives < START_LIVES);
-    }
+    for (int pass = 0; pass < FX_GLOW_PASSES; pass++) {
+        fx_glow_pass(pass);
 
-    if (g->ship.base.alive)   draw_ship(&g->ship);
-    // Only once the pause is over and something is actually in the way.
-    else if (!g->gameOver && g->ship.respawnIn <= 0.0f) draw_ship_pending(&g->ship);
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (!g->bullets[i].base.alive) continue;
+
+            Vector2 at[4];
+            int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
+            for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
+        }
+        for (int i = 0; i < MAX_PICKUPS; i++) {
+            if (g->pickups[i].base.alive) draw_pickup(&g->pickups[i], g->lives < START_LIVES);
+        }
+
+        if (g->ship.base.alive)   draw_ship(&g->ship);
+        // Only once the pause is over and something is actually in the way.
+        else if (!g->gameOver && g->ship.respawnIn <= 0.0f) draw_ship_pending(&g->ship);
+    }
+    fx_glow_pass(FX_GLOW_BOTH);
 
     fx_draw_scores(&g->fx);
     draw_hud(g);

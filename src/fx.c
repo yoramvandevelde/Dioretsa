@@ -348,20 +348,45 @@ void fx_draw_particles(const Fx *fx)
     }
 }
 
+// Which half of a glow the calls below draw, see fx.h. Both by default, so a
+// caller that has nothing to group gets whole objects without asking.
+static int glowPass = FX_GLOW_BOTH;
+
+void fx_glow_pass(int pass)
+{
+    if (pass == glowPass) return;
+    glowPass = pass;
+
+    // Whole objects switch to additive and back around their own haloes, so
+    // outside a grouped pass the mode must be left where it was found.
+    if (pass == FX_GLOW_HALO) BeginBlendMode(BLEND_ADDITIVE);
+    else                      EndBlendMode();
+}
+
+static bool draws_halo(void) { return glowPass != FX_GLOW_LINE; }
+static bool draws_line(void) { return glowPass != FX_GLOW_HALO; }
+
+// No-ops inside a grouped pass, where the mode is already set and holding it
+// is the entire point.
+static void halo_begin(void) { if (glowPass == FX_GLOW_BOTH) BeginBlendMode(BLEND_ADDITIVE); }
+static void halo_end(void)   { if (glowPass == FX_GLOW_BOTH) EndBlendMode(); }
+
 // Two soft additive passes underneath, then the crisp line on top. Additive on
 // a black background is what gives it the CRT bloom look.
 void fx_glow_poly(Vector2 center, int sides, float radius, float rotationDeg, Color color)
 {
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_WIDE,
-                        Fade(color, GLOW_WIDE_ALPHA * a));
-        DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_TIGHT,
-                        Fade(color, GLOW_TIGHT_ALPHA * a));
-    EndBlendMode();
+    if (draws_halo()) {
+        halo_begin();
+            DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_WIDE,
+                            Fade(color, GLOW_WIDE_ALPHA * a));
+            DrawPolyLinesEx(center, sides, radius, rotationDeg, GLOW_TIGHT,
+                            Fade(color, GLOW_TIGHT_ALPHA * a));
+        halo_end();
+    }
 
-    DrawPolyLines(center, sides, radius, rotationDeg, color);
+    if (draws_line()) DrawPolyLines(center, sides, radius, rotationDeg, color);
 }
 
 void fx_glow_strip(const Vector2 *points, int count, Color color)
@@ -370,29 +395,33 @@ void fx_glow_strip(const Vector2 *points, int count, Color color)
 
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        for (int pass = 0; pass < 2; pass++) {
-            float width = (pass == 0) ? GLOW_WIDE : GLOW_TIGHT;
-            float alpha = ((pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA) * a;
-            for (int i = 0; i < count - 1; i++) {
-                DrawLineEx(points[i], points[i + 1], width, Fade(color, alpha));
+    if (draws_halo()) {
+        halo_begin();
+            for (int pass = 0; pass < 2; pass++) {
+                float width = (pass == 0) ? GLOW_WIDE : GLOW_TIGHT;
+                float alpha = ((pass == 0) ? GLOW_WIDE_ALPHA : GLOW_TIGHT_ALPHA) * a;
+                for (int i = 0; i < count - 1; i++) {
+                    DrawLineEx(points[i], points[i + 1], width, Fade(color, alpha));
+                }
             }
-        }
-    EndBlendMode();
+        halo_end();
+    }
 
-    DrawLineStrip((Vector2 *)points, count, color);
+    if (draws_line()) DrawLineStrip((Vector2 *)points, count, color);
 }
 
 void fx_glow_dot(Vector2 pos, float radius, Color color)
 {
     float a = color.a / 255.0f;     // a fading shape must fade its halo too
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        dot(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
-        dot(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
-    EndBlendMode();
+    if (draws_halo()) {
+        halo_begin();
+            dot(pos, radius * 3.5f, Fade(color, GLOW_WIDE_ALPHA * a));
+            dot(pos, radius * 2.0f, Fade(color, GLOW_TIGHT_ALPHA * a));
+        halo_end();
+    }
 
-    dot(pos, radius, color);
+    if (draws_line()) dot(pos, radius, color);
 }
 
 void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Color color)
@@ -407,12 +436,14 @@ void fx_glow_arc(Vector2 pos, float radius, float thickness, float sweepDeg, Col
 
     int seg = arc_segments(radius, sweepDeg);
 
-    BeginBlendMode(BLEND_ADDITIVE);
-        DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, seg,
-                 Fade(color, GLOW_WIDE_ALPHA * a));
-    EndBlendMode();
+    if (draws_halo()) {
+        halo_begin();
+            DrawRing(pos, radius - half * 3.0f, radius + half * 3.0f, from, to, seg,
+                     Fade(color, GLOW_WIDE_ALPHA * a));
+        halo_end();
+    }
 
-    DrawRing(pos, radius - half, radius + half, from, to, seg, color);
+    if (draws_line()) DrawRing(pos, radius - half, radius + half, from, to, seg, color);
 }
 
 void fx_glow_ring(Vector2 pos, float radius, float thickness, Color color)

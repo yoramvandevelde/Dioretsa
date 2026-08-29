@@ -76,6 +76,15 @@ field alone used to overrun it every frame and force an upload mid-picture.
 `arc_segments` in `fx.c` takes the count from the radius instead, and the
 Android build asks raylib for the desktop-sized buffer.
 
+The other thing that empties that buffer is a change of blend mode, and a glow
+is additive haloes with a crisp line over them, so drawing objects whole meant
+flipping the mode twice per object: measured at 38 to 60 flushes a frame on the
+opening waves and worse later. `fx_glow_pass` lets a caller draw a whole
+layer's haloes and then that layer's lines, which is six changes a frame and
+does not grow with the field. There are two layers rather than one because the
+particles belong between them. It looks the same: additive light only ever
+adds, so the order haloes go down in cannot matter.
+
 The one thing that cannot follow along for free is text, which is baked into a
 texture at load: `fx_load_fonts` takes the scale so the glyphs are cut for the
 size they will be drawn at. There are two cuts of Archivo Black rather than
