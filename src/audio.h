@@ -17,6 +17,7 @@ typedef enum {
     SND_GRAZE,
     SND_GAMEOVER,
     SND_WAVE,
+    SND_SAUCER,             // the intruder, arriving
     SND_COUNT
 } SoundId;
 
@@ -40,6 +41,15 @@ typedef struct {
 // wraps, so its pan flips sides there, and a flip you can hear is a flip that
 // sounds broken. Fading through the crossing hides it.
 void audio_set_engine(EngineState state);
+
+// The intruder's voice. A one-shot rather than a loop, so it cannot be handled
+// like the engine, but it still crosses the screen while it plays and a pan
+// that stays where the thing started is a pan you notice. So the voice it was
+// given is kept hold of, and moved. Stopping is for the frame it is broken on,
+// where the explosion covers the cut; left to itself it decays to silence.
+void audio_saucer_start(float pan);
+void audio_saucer_pan(float pan);
+void audio_saucer_stop(void);
 
 // The soundscape runs from launch to exit, straight through pause and game
 // over: it is the room you are in, not a reaction to anything. Toggling fades

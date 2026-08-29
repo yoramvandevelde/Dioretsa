@@ -49,6 +49,35 @@
 #define SEEK_ACCEL        140.0f    // pixels per second^2 for BEHAVIOR_SEEK
 #define SAFE_SPAWN_DIST   180.0f    // keep spawns clear of the ship
 
+// How far past an edge a mirrored copy is still drawn. It covers the glow
+// halo, which reaches past the shape itself.
+#define GHOST_MARGIN      10.0f
+
+// The intruder. Fifteen seconds is long enough that it never catches anyone
+// who is merely busy dodging, and short enough that it catches anyone who has
+// decided to stop playing. It is deliberately generous: punishing good defence
+// would cost the mechanic its credibility.
+#define STALL_TIME        15.0f     // seconds without a hit before one arrives
+#define INTRUDER_RADIUS   26.0f
+#define INTRUDER_SPEED    200.0f    // cap on the closing speed, not on the speed: it
+                                    // also carries its target's drift, so chasing a
+                                    // fast one legitimately goes quicker than this
+#define INTRUDER_EASE     0.35f     // seconds for its velocity to settle on what it wants
+#define INTRUDER_CLOSE    2.0f      // closing speed per unit of distance left to cover
+#define INTRUDER_STANDOFF 55.0f     // the gap it holds off the target's surface
+#define INTRUDER_SLACK    45.0f     // and how much further out it will still take the shot
+#define INTRUDER_ARM      2.75f     // earliest it may fire, seconds after arriving
+#define INTRUDER_FADE     0.4f      // seconds of fading in, so it does not just appear
+#define INTRUDER_LEAVE    1.5f      // seconds of fading out once it is done
+#define INTRUDER_EXIT     360.0f    // and how fast it goes while doing so
+#define INTRUDER_SHOT     620.0f    // its bullet, faster than yours
+#define INTRUDER_CLEAR    260.0f    // never materialise this close to the ship
+#define INTRUDER_TRIES    8         // attempts at a spawn that far out
+
+// Magenta appears nowhere else: the four enemies are grey, blue, yellow and
+// red, and the ship and its shots are white.
+static const Color INTRUDER_COLOR = { 245, 40, 220, 255 };
+
 // All enemy balancing lives here. The split chain runs large to small:
 // hexagon -> pentagon -> square -> triangle -> gone.
 //
@@ -284,6 +313,7 @@ void game_init(Game *g)
     // neither should a wave title still ringing from the last one.
     audio_stop(SND_GAMEOVER);
     audio_stop(SND_WAVE);
+    audio_saucer_stop();
 
     *g = (Game){ 0 };
 
@@ -320,6 +350,9 @@ static void fire_bullet(Game *g)
     Vector2 dir   = rotate((Vector2){ 1.0f, 0.0f }, s->base.rot);
     Bullet *b     = &g->bullets[slot];
 
+    // A slot keeps nothing from its last life. Leaving one field behind is all
+    // it takes to inherit somebody else's bullet.
+    *b = (Bullet){ 0 };
     b->base.pos    = (Vector2){ s->base.pos.x + dir.x * 18.0f,
                                 s->base.pos.y + dir.y * 18.0f };
     b->base.vel    = (Vector2){ s->base.vel.x + dir.x * BULLET_SPEED,
@@ -339,6 +372,219 @@ static void fire_bullet(Game *g)
     g->stats.shots++;
 
     g->ship.fireCooldown = FIRE_COOLDOWN;
+}
+
+// The largest enemy that still has something to break into. Triangles are
+// skipped on purpose: they are the end of the chain, so shooting one would
+// take work off the player's hands and could even clear the last wave for
+// them. The intruder is only ever allowed to make the field worse.
+// Is there anything at all it would be allowed to touch? Triangles never count:
+// they are the end of the chain, so breaking one would take work off the
+// player's hands and could even clear the last wave for them. The intruder is
+// only ever allowed to make the field worse.
+static bool any_splittable(const Game *g)
+{
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (!g->enemies[i].base.alive) continue;
+        if (ENEMY_TYPES[g->enemies[i].type].splitInto >= 0) return true;
+    }
+    return false;
+}
+
+// It picks one and stays with it, so the slot has to be checked rather than
+// trusted: split_enemy fills free slots, and the thing it came for may have
+// been broken and replaced in the same array position by one of its own
+// children. Anything that fails the check gets the pick made again.
+//
+// The pick is flat across everything eligible rather than always the largest.
+// Always taking the biggest sounds tidier and played worse: it sent the thing
+// wherever the hexagons happened to be, which is often nowhere near the
+// picture.
+static Enemy *intruder_target(Game *g)
+{
+    Intruder *in = &g->intruder;
+
+    if (in->target >= 0) {
+        Enemy *e = &g->enemies[in->target];
+        if (e->base.alive && ENEMY_TYPES[e->type].splitInto >= 0) return e;
+    }
+
+    int pool[MAX_ENEMIES], n = 0;
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (!g->enemies[i].base.alive) continue;
+        if (ENEMY_TYPES[g->enemies[i].type].splitInto < 0) continue;
+        pool[n++] = i;
+    }
+    if (n == 0) { in->target = -1; return NULL; }
+
+    in->target = pool[GetRandomValue(0, n - 1)];
+    return &g->enemies[in->target];
+}
+
+// Anywhere in the field, not at an edge. Coming in from outside is a fiction on
+// a world that wraps, and it cost more than the story was worth: an edge is the
+// one place nobody is looking, so it would sit out there, take its shot and
+// leave without ever crossing the picture. It keeps its distance from the ship,
+// and enough off the edges that its mirrored copies behave from the first frame
+// rather than having to be suppressed until it is properly inside.
+//
+// Best of a handful of tries rather than a loop that could in principle spin
+// forever on a crowded field.
+static void spawn_intruder(Game *g)
+{
+    Intruder *in     = &g->intruder;
+    float     margin = INTRUDER_RADIUS + GHOST_MARGIN;
+    Vector2   best   = { WORLD_W / 2.0f, WORLD_H / 2.0f };
+    float     bestD2 = -1.0f;
+
+    for (int t = 0; t < INTRUDER_TRIES; t++) {
+        Vector2 p = { frand(margin, WORLD_W - margin), frand(margin, WORLD_H - margin) };
+
+        float dx = torus_offset(p.x, g->ship.base.pos.x, WORLD_W);
+        float dy = torus_offset(p.y, g->ship.base.pos.y, WORLD_H);
+        float d2 = dx * dx + dy * dy;
+
+        if (d2 > bestD2) { bestD2 = d2; best = p; }
+        if (d2 >= INTRUDER_CLEAR * INTRUDER_CLEAR) break;
+    }
+
+    *in = (Intruder){ 0 };
+    in->base.pos    = best;
+    in->base.radius = INTRUDER_RADIUS;
+    in->base.alive  = true;
+    in->target      = -1;       // zero is a real slot, so it cannot stand for none
+
+    audio_saucer_start(pan_of(in->base.pos.x));
+}
+
+// Done here, one way or another: it fired, or the player started playing again.
+// It keeps whatever heading it had and fades out over the next second and a
+// half, which reads as leaving without needing an exit that beats the wrap.
+static void intruder_leave(Game *g)
+{
+    Intruder *in = &g->intruder;
+    if (!in->base.alive || in->leaveIn > 0.0f) return;
+
+    float sp = sqrtf(in->base.vel.x * in->base.vel.x + in->base.vel.y * in->base.vel.y);
+    Vector2 dir = (sp > 0.001f) ? (Vector2){ in->base.vel.x / sp, in->base.vel.y / sp }
+                                : rotate((Vector2){ 1.0f, 0.0f }, frand(0.0f, 2.0f * PI));
+
+    in->leaveVel = (Vector2){ dir.x * INTRUDER_EXIT, dir.y * INTRUDER_EXIT };
+    in->leaveIn  = INTRUDER_LEAVE;
+}
+
+// Shot down or flown into: the same end either way, and worth nothing either
+// way. Making the answer to lurking the most valuable prize on the field is
+// precisely the mistake the 1979 machine made, and it turned the cure into the
+// best farm in the game. The reward for breaking this is that it does not get
+// its shot.
+static void break_intruder(Game *g)
+{
+    Intruder *in = &g->intruder;
+
+    fx_emit_burst(&g->fx, in->base.pos, in->base.vel, INTRUDER_COLOR, 34, 190.0f);
+    // PLACEHOLDER: the deepest explosion, dropped a long way, until breaking
+    // this has a sound of its own. Its arrival already does.
+    audio_play_at(SND_EXPLOSION_5, pan_of(in->base.pos.x), 0.55f);
+    audio_saucer_stop();
+
+    in->base.alive = false;
+    g->sinceHit    = 0.0f;
+}
+
+static void intruder_fire(Game *g, const Enemy *target)
+{
+    int slot = find_free_slot(&g->bullets[0].base, MAX_BULLETS, sizeof(Bullet));
+    if (slot < 0) return;
+
+    const Intruder *in = &g->intruder;
+    float dx = torus_offset(in->base.pos.x, target->base.pos.x, WORLD_W);
+    float dy = torus_offset(in->base.pos.y, target->base.pos.y, WORLD_H);
+    float d  = sqrtf(dx * dx + dy * dy);
+    if (d < 0.001f) return;
+
+    // No lead: it shoots from just off the target's surface, so the bullet is
+    // in the air for around a quarter of a second, and the biggest thing on
+    // the field cannot travel its own radius in that time. Aiming where it is
+    // now is aiming where it will be.
+    Bullet *b = &g->bullets[slot];
+    *b = (Bullet){ 0 };
+    b->base.pos    = in->base.pos;
+    b->base.vel    = (Vector2){ (dx / d) * INTRUDER_SHOT, (dy / d) * INTRUDER_SHOT };
+    b->base.rot    = atan2f(dy, dx);
+    b->base.rotVel = 0.0f;
+    b->base.radius = BULLET_RADIUS;
+    b->base.alive  = true;
+    b->life        = BULLET_LIFE;
+    b->hostile     = true;
+
+    fx_emit_muzzle(&g->fx, b->base.pos, (Vector2){ dx / d, dy / d }, in->base.vel);
+}
+
+// It never takes a velocity, it eases onto one, so turning and slowing are a
+// single motion rather than a switch being thrown. Exponential, and written
+// against dt so the shape of it does not depend on the frame rate.
+static void intruder_steer(Intruder *in, Vector2 want, float dt)
+{
+    float k = 1.0f - expf(-dt / INTRUDER_EASE);
+    in->base.vel.x += (want.x - in->base.vel.x) * k;
+    in->base.vel.y += (want.y - in->base.vel.y) * k;
+}
+
+static void update_intruder(Game *g, float dt)
+{
+    Intruder *in = &g->intruder;
+    if (!in->base.alive) return;
+
+    in->age += dt;
+    audio_saucer_pan(pan_of(in->base.pos.x));
+
+    if (in->leaveIn > 0.0f) {
+        in->leaveIn -= dt;
+        if (in->leaveIn <= 0.0f) {
+            in->base.alive = false;
+            g->sinceHit    = 0.0f;      // the clock starts again once it is gone
+            return;
+        }
+        intruder_steer(in, in->leaveVel, dt);
+        entity_integrate(&in->base, dt);
+        return;
+    }
+
+    Enemy *target = intruder_target(g);
+    if (!target) { intruder_leave(g); return; }
+
+    float dx = torus_offset(in->base.pos.x, target->base.pos.x, WORLD_W);
+    float dy = torus_offset(in->base.pos.y, target->base.pos.y, WORLD_H);
+    float d  = sqrtf(dx * dx + dy * dy);
+
+    // It holds off the target's surface rather than its centre, so the gap it
+    // keeps is the same whether it came for a hexagon or a square.
+    float standoff = target->base.radius + INTRUDER_STANDOFF;
+
+    // The closing speed falls away with the ground left to cover, which turns
+    // the approach into a settle: there is never a moment where it has to
+    // brake, because it was already slowing before it got here.
+    float closing = (d - standoff) * INTRUDER_CLOSE;
+    if (closing > INTRUDER_SPEED) closing = INTRUDER_SPEED;
+    if (closing < 0.0f)           closing = 0.0f;
+
+    // And what it settles onto is the target's own drift, not a spot on the
+    // map. Parking at a fixed point and letting the thing it came for float
+    // out from under it looks like it lost interest.
+    Vector2 want = target->base.vel;
+    if (d > 0.001f) {
+        want.x += (dx / d) * closing;
+        want.y += (dy / d) * closing;
+    }
+    intruder_steer(in, want, dt);
+
+    if (in->age >= INTRUDER_ARM && d <= standoff + INTRUDER_SLACK) {
+        intruder_fire(g, target);
+        intruder_leave(g);
+    }
+
+    entity_integrate(&in->base, dt);
 }
 
 static void kill_ship(Game *g)
@@ -495,6 +741,16 @@ void game_update(Game *g, const Input *in, float dt)
     // Stars drift against the ship's motion, and stand still while it is gone.
     fx_update(&g->fx, s->base.alive ? s->base.vel : (Vector2){ 0.0f, 0.0f }, dt);
 
+    // The stall clock only runs while the player could actually be hitting
+    // something: not while dead, not under a wave title, and not while an
+    // intruder is already here. Everything else that holds the run still has
+    // returned from this function long before now.
+    if (s->base.alive && g->banner <= 0.0f && !g->intruder.base.alive) {
+        g->sinceHit += dt;
+        if (g->sinceHit >= STALL_TIME && any_splittable(g)) spawn_intruder(g);
+    }
+    update_intruder(g, dt);
+
     for (int i = 0; i < MAX_BULLETS; i++) {
         Bullet *b = &g->bullets[i];
         if (!b->base.alive) continue;
@@ -521,33 +777,81 @@ void game_update(Game *g, const Input *in, float dt)
         for (int ei = 0; ei < MAX_ENEMIES; ei++) {
             Enemy *e = &g->enemies[ei];
             if (!e->base.alive) continue;
+
+            // A stray intruder shot passes straight through anything it is not
+            // allowed to break. Enforcing the rule here as well as in the
+            // targeting is what makes it airtight: it can never end a wave,
+            // however badly it aimed.
+            if (b->hostile && ENEMY_TYPES[e->type].splitInto < 0) continue;
             if (!entity_hit(&b->base, &e->base)) continue;
 
             b->base.alive = false;
+            if (!b->hostile) {
+                // Connecting with anything is proof enough that the run is
+                // still being played, so the clock goes back to nought and
+                // whatever came to punish the standing still turns around.
+                g->sinceHit = 0.0f;
+                intruder_leave(g);
+            }
             if (--e->hp > 0) break;
 
             e->base.alive = false;
-            g->score += ENEMY_TYPES[e->type].score;
-
-            g->stats.hits++;
-            g->stats.kills[e->type]++;
-            g->stats.scoreShot += ENEMY_TYPES[e->type].score;
-
             const EnemyType *t = &ENEMY_TYPES[e->type];
-            fx_emit_burst(&g->fx, e->base.pos, e->base.vel, t->color,
+
+            if (b->hostile) {
+                // Taken rather than earned, so the points come off instead of
+                // on. The floor at zero keeps the opening of a run, the one
+                // time there is genuinely nothing to lose, from going negative.
+                int taken = (t->score > g->score) ? g->score : t->score;
+                g->score -= taken;
+                g->stats.scoreLost += taken;
+
+                // The number that floats off is the price of the shape, not
+                // the part of it the floor allowed: the report is a ledger and
+                // has to add up, the popup is a picture and has to read.
+                fx_emit_score(&g->fx, e->base.pos, -t->score);
+            } else {
+                g->score += t->score;
+                g->stats.hits++;
+                g->stats.kills[e->type]++;
+                g->stats.scoreShot += t->score;
+
+                if (t->splitInto < 0 && GetRandomValue(1, 100) <= PICKUP_CHANCE) {
+                    drop_pickup(g, e->base.pos, e->base.vel);
+                }
+            }
+
+            fx_emit_burst(&g->fx, e->base.pos, e->base.vel,
+                          b->hostile ? INTRUDER_COLOR : t->color,
                           6 + t->sides * 3, 40.0f + e->base.radius * 2.2f);
 
             // A touch of pitch so a chain reaction does not sound like one
             // sample played five times.
             audio_play_at(t->sound, pan_of(e->base.pos.x), audio_pitch_jitter(0.05f));
 
-            if (t->splitInto < 0 && GetRandomValue(1, 100) <= PICKUP_CHANCE) {
-                drop_pickup(g, e->base.pos, e->base.vel);
-            }
-
             split_enemy(g, e);
             break;
         }
+    }
+
+    // Your bullets against the intruder, and the ship against it as well: it is
+    // not solid to anybody, so flying into it breaks it and costs nothing.
+    // Killing the player is no business of a thing whose entire job is to make
+    // the field worse.
+    if (g->intruder.base.alive && g->intruder.leaveIn <= 0.0f) {
+        for (int bi = 0; bi < MAX_BULLETS; bi++) {
+            Bullet *b = &g->bullets[bi];
+            if (!b->base.alive || b->hostile) continue;
+            if (!entity_hit(&b->base, &g->intruder.base)) continue;
+
+            b->base.alive = false;
+            break_intruder(g);
+            break;
+        }
+    }
+    if (g->intruder.base.alive && g->intruder.leaveIn <= 0.0f &&
+        s->base.alive && entity_hit(&s->base, &g->intruder.base)) {
+        break_intruder(g);
     }
 
     // Ship against enemy. The enemy survives the crash: no score, no split.
@@ -668,10 +972,7 @@ void game_update(Game *g, const Input *in, float dt)
 }
 
 // An object near an edge has to be drawn on the far side as well, otherwise it
-// pops in and out instead of sliding across. Corners need all four copies. The
-// margin covers the glow halo, which reaches past the shape itself.
-#define GHOST_MARGIN 10.0f
-
+// pops in and out instead of sliding across. Corners need all four copies.
 static int ghost_positions(Vector2 pos, float radius, Vector2 out[4])
 {
     float r = radius + GHOST_MARGIN;
@@ -689,6 +990,27 @@ static int ghost_positions(Vector2 pos, float radius, Vector2 out[4])
         }
     }
     return n;
+}
+
+// A filled disc, and the only round thing on the field. Everything else is a
+// polygon drawn as an outline, so a solid circle reads as not belonging here
+// before the colour has even registered. It fades in and out rather than
+// blinking, which on a wrapping world is also the only entrance and exit that
+// work: there is no off-screen to come from or reach.
+static void draw_intruder(const Intruder *in)
+{
+    // It fades in as well as out. Nothing else on the field appears from
+    // nowhere, so without this it reads as a drawing bug rather than as an
+    // arrival, and the two ends of its visit now match.
+    float a = (in->leaveIn > 0.0f) ? in->leaveIn / INTRUDER_LEAVE
+            : (in->age < INTRUDER_FADE) ? in->age / INTRUDER_FADE
+            : 1.0f;
+
+    Vector2 at[4];
+    int n = ghost_positions(in->base.pos, INTRUDER_RADIUS, at);
+    for (int i = 0; i < n; i++) {
+        fx_glow_dot(at[i], INTRUDER_RADIUS, Fade(INTRUDER_COLOR, a));
+    }
 }
 
 static void draw_ship_shape(Vector2 pos, float rot, float scale, Color color)
@@ -883,6 +1205,7 @@ static void draw_report(const Game *g)
     stat_row(col[1], top + 3 * step, w, "accuracy",    TextFormat("%i%%", accuracy));
     stat_row(col[1], top + 4 * step, w, "shots per kill",
              TextFormat("%.1f", total ? (float)st->shots / total : 0.0f));
+    stat_row(col[1], top + 5 * step, w, "points stolen", TextFormat("%i", st->scoreLost));
 
     int fromGraze = (g->score > 0) ? (100 * st->scoreGraze) / g->score : 0;
     hud_text("THE DANCE", col[2], top, 20, DARKGRAY);
@@ -1007,13 +1330,17 @@ void game_draw(const Game *g)
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (!g->bullets[i].base.alive) continue;
 
+            Color c = g->bullets[i].hostile ? INTRUDER_COLOR : RAYWHITE;
+
             Vector2 at[4];
             int n = ghost_positions(g->bullets[i].base.pos, BULLET_RADIUS, at);
-            for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, RAYWHITE);
+            for (int k = 0; k < n; k++) fx_glow_dot(at[k], BULLET_RADIUS, c);
         }
         for (int i = 0; i < MAX_PICKUPS; i++) {
             if (g->pickups[i].base.alive) draw_pickup(&g->pickups[i], g->lives < START_LIVES);
         }
+
+        if (g->intruder.base.alive) draw_intruder(&g->intruder);
 
         if (g->ship.base.alive)   draw_ship(&g->ship);
         // Only once the pause is over and something is actually in the way.
