@@ -381,10 +381,6 @@ static void fire_bullet(Game *g)
     g->ship.fireCooldown = FIRE_COOLDOWN;
 }
 
-// The largest enemy that still has something to break into. Triangles are
-// skipped on purpose: they are the end of the chain, so shooting one would
-// take work off the player's hands and could even clear the last wave for
-// them. The intruder is only ever allowed to make the field worse.
 // Is there anything at all it would be allowed to touch? Triangles never count:
 // they are the end of the chain, so breaking one would take work off the
 // player's hands and could even clear the last wave for them. The intruder is
@@ -648,8 +644,13 @@ static void enemy_behave(Enemy *e, const Game *g, float dt)
             break;                  // heading is fixed, just integrate
 
         case BEHAVIOR_SEEK: {
-            Vector2 d = { g->ship.base.pos.x - e->base.pos.x,
-                          g->ship.base.pos.y - e->base.pos.y };
+            // Over an edge the short way round is the way entity_hit already
+            // measures, and the chase has to agree with it. Straight
+            // subtraction sends a triangle sitting just across the seam
+            // accelerating a whole world the other way, away from the ship it
+            // is about to collide with.
+            Vector2 d = { torus_offset(e->base.pos.x, g->ship.base.pos.x, WORLD_W),
+                          torus_offset(e->base.pos.y, g->ship.base.pos.y, WORLD_H) };
             float len = sqrtf(d.x * d.x + d.y * d.y);
             if (len < 0.001f) break;
 

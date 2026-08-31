@@ -217,8 +217,10 @@ the screen width so it can be read, then one second growing to 260% while it
 fades, which puts it over the game rather than on it. The growth is squared, so
 it starts from a standstill and the hold flows into the rush without a kink.
 
-The title is set in Archivo Black, loaded once after the window opens and used
-for nothing else; the HUD keeps the built-in font. The loader looks next to the
+The title is set in Archivo Black, and so is the HUD: two faces off the same
+file, each rasterised at the size it is actually drawn at and scaled to the
+panel, because the built-in bitmap font breaks into blocks on a television.
+Both are baked once after the window opens. The loader looks next to the
 working directory and next to the executable, and falls back to the built-in
 font if neither turns up, so a missing file costs you the typeface and nothing
 more.
@@ -335,9 +337,10 @@ how much of the score came from grazing rather than shooting, and the closest
 you came to something and lived. The shooting column ends with the points the
 intruder took, which is the only number in the report that went the wrong way.
 
-Text is drawn at multiples of ten because the built-in font has a base size of
-10. Anything else stretches its pixels unevenly and reads as slightly blurred,
-which is easy to mistake for the font simply being wrong.
+Text is set against a face baked at 40, the largest size the HUD asks for, so
+every smaller size scales down a little rather than up a lot. The old rule of
+sticking to multiples of ten belonged to the built-in bitmap font and went with
+it.
 
 ## Effects
 
@@ -435,7 +438,7 @@ Star field, thruster trail, debris bursts and vector glow, all in `fx.c`.
 
 Distance is measured the short way round the torus (`torus_offset`), so two
 objects that visibly overlap across an edge actually touch. Everything that
-measures goes through it: collisions, bullets, grazing, the respawn check and
-wave spawning.
+measures goes through it: collisions, bullets, grazing, the respawn check, wave
+spawning, the intruder's targeting and the triangles' chase.
 
-Not done yet: sound, screen shake and a high score.
+Not done yet: screen shake and a high score.
